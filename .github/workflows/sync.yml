@@ -19,8 +19,9 @@ jobs:
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
         run: |
-          https://oauth2:${GITLAB_TOKEN}@git.gft.com/smc-2026/equipe-10/projeto-equipe-10.git
+          git remote add gitlab https://oauth2:${GITLAB_TOKEN}@git.gft.com/smc-2026/equipe-10/projeto-equipe-10.git
           git push gitlab --all --force
           git push gitlab --tags --force
+
           
 
