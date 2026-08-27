@@ -1,0 +1,24 @@
+name: Sync to GitLab
+
+on:
+  push:
+    branches: [ "*" ] # Sincroniza todas as branches
+  delete:
+    branches: [ "*" ] # Sincroniza exclusões de branches também
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to GitLab
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          git remote add gitlab https://oauth2:$GITLAB_TOKEN@https://git.gft.com/smc-2026/equipe-10/projeto-equipe-10.git
+          git push gitlab --all --force
+          git push gitlab --tags --force
