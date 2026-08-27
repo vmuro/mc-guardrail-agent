@@ -29,7 +29,7 @@
 
 |Papel|Nome|E-mail GFT|
 |---|---|---|
-|**Capitão**|[Nome do capitão]|[email]|
+|**Capitão**|Victor Rosa|vrmu@gft.com|
 |Integrante|[Nome]|[email]|
 |Integrante|[Nome]|[email]|
 |Integrante|[Nome]|[email]|
