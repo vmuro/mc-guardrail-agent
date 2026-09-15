@@ -1,8 +1,5 @@
-<!--
-=====================================================================
- TEMPLATE DE README — Desafio de Agentes de IA · Mercado de Capitais
- GFT × Google · rumo à Semana de Mercado de Capitais 2026 (SMC26)
-=====================================================================
+# Agente Proativo de Investimentos com Gemini e Guardrail
+
 
  INSTRUÇÕES PARA A EQUIPE:
  - Este é um MODELO. Preencha todos os campos entre colchetes [ ... ]
@@ -30,9 +27,6 @@
 |Papel|Nome|E-mail GFT|
 |---|---|---|
 |**Capitão**|Victor Rosa|vrmu@gft.com|
-|Integrante|[Nome]|[email]|
-|Integrante|[Nome]|[email]|
-|Integrante|[Nome]|[email]|
 
 **Nome da equipe:** [Nome do time]
 
@@ -74,120 +68,100 @@
 
 ---
 
+Este projeto é um MVP (Minimum Viable Product) de um agente autônomo de investimentos focado em *Swing Trade* no mercado brasileiro (B3). O agente utiliza a IA do Google (Gemini) para análise de mercado e um Guardrail determinístico para garantir que as operações sigam regras de risco e orçamento.
+
+
 ## Arquitetura
 
-<!-- Insira aqui o diagrama da solução. Coloque o arquivo em /docs (ver estrutura ao final) e referencie a imagem abaixo (a imagem que está exibindo é apenas um exemplo para o link, não considere como modelo). -->
+O sistema opera como um pipeline de processamento em lote, implantado como um **Cloud Run Job** e acionado por um **Cloud Scheduler**.
 
-![Arquitetura da Solução](docs/arquitetura-referencia.png)
+O fluxo é o seguinte:
+1.  **Cloud Scheduler**: Dispara o job em uma programação definida (ex: diariamente).
+2.  **Cloud Run Job**: Executa o container da aplicação.
+3.  **Aplicação Python**:
+    1.  **Coleta de Dados**: Busca indicadores técnicos (`yfinance`, `ta`) e notícias (`feedparser`).
+    2.  **Análise de IA**: Envia os dados para o **Gemini 2.5 Flash** (via Vertex AI) para obter uma recomendação (`BUY`/`SELL`/`HOLD`).
+    3.  **Auditoria de Risco**: A recomendação é validada por um **Guardrail** (`Pydantic`) que checa orçamento, stop-loss e limites de risco.
+    4.  **Logging**: O resultado final é registrado no **Cloud Logging** para auditoria.
 
-**Descrição do fluxo:** [Explique em poucas linhas como os componentes se conectam.]
-
----
-
-## Stack Tecnológica
-
-|Camada|Tecnologia|
-|---|---|
-|Plataforma de IA|Gemini Enterprise|
-|Abordagem|[ Low-code (Agent Builder) / Code (Vertex AI + ADK) ]|
-|Modelo(s)|[ex.: Gemini 2.5 Pro]|
-|Recursos usados|[ex.: RAG, function calling, multi-agentes, Workspace]|
-|Outras ferramentas|[ex.: Python, Sheets, Drive]|
-
-<!-- O Gemini Enterprise é a ferramenta oficial de IA do desafio. Indique se seguiu a trilha low-code, code, ou ambas. -->
-
----
-
-## ▶️ Demo
-
-<!-- ENTREGÁVEL OBRIGATÓRIO: protótipo navegável ou simulado. -->
-
-🔗 **Link da demo:** [URL do protótipo navegável / ambiente]
-
-**Como executar localmente** _(se aplicável)_:
-
-```bash
-[comandos para rodar / instruções de acesso]
-```
-
-**Credenciais de teste** _(se aplicável)_: [usuário / senha mock]
-
----
-
-## 🎥 Vídeo (Pitch + Demo)
-
-<!-- ENTREGÁVEL OBRIGATÓRIO: vídeo com pitch + demonstração. O vídeo deve ser gravado no sharepoint da GFT ou dentro do próprio repositório (caso nao comporte, dividir em mais arquivos -->
-
-🔗 **Link do vídeo:** [URL — Sharepoint ou pasta do gitlab, etc.]
-
-⏱️ Duração: [ex.: 3 a 5 min]
-
----
-
-## 📎 Artefatos Entregáveis
-
-Todos os entregáveis obrigatórios do desafio estão organizados neste repositório conforme a tabela abaixo. **Preencha os links e confirme que cada arquivo está no diretório indicado.**
-
-|Entregável|Formato|Onde está|Status|
-|---|---|---|---|
-|Demo funcional|Link / código|seção [Demo](https://claude.ai/chat/e9e1272b-c54e-4be6-b23f-7fced83f01ba#%EF%B8%8F-demo) + `/src`|☐|
-|Vídeo (pitch + demo)|Link (MP4/URL)|seção [Vídeo](https://claude.ai/chat/e9e1272b-c54e-4be6-b23f-7fced83f01ba#-v%C3%ADdeo-pitch--demo) + `/docs/video/`|☐|
-|One-pager (problema, solução, impacto)|**PDF**|`/docs/one-pager.pdf`|☐|
-|Diagrama de arquitetura|**PDF** + imagem|`/docs/arquitetura.pdf` · `/docs/arquitetura.png`|☐|
-|Apresentação (opcional)|PPT/PDF|`/docs/apresentacao.pptx`|☐|
-
-<!-- Marque [x] quando cada item estiver pronto. A SUBMISSÃO FINAL no Forms pedirá: link da demo, link do vídeo, arquitetura (PDF) e one-pager (PDF). -->
-
----
-
-## 📁 Estrutura do Repositório
-
-<!-- INSTRUÇÕES DE ORGANIZAÇÃO DOS ARQUIVOS — leia com atenção. Grave cada tipo de artefato exatamente na pasta indicada abaixo. Isso padroniza a avaliação e facilita o trabalho do júri. -->
+## Estrutura do Projeto
 
 ```
 .
-├── README.md                  ← este arquivo (o cartão de visita do agente)
-│
-├── src/                       ← CÓDIGO-FONTE do agente
-│   ├── ...                       (scripts Python/ADK, configs do Agent Builder,
-│   │                              prompts, exports de fluxo low-code, etc.)
-│   └── requirements.txt          (dependências, se houver código)
-│
-├── data/                      ← DADOS mock / públicos / sintéticos
-│   └── ...                       (⚠️ NUNCA dados reais, confidenciais ou sensíveis)
-│
-├── docs/                      ← DOCUMENTAÇÃO e artefatos de entrega
-│   ├── one-pager.pdf             → PDF: problema, solução e impacto (OBRIGATÓRIO)
-│   ├── arquitetura.pdf           → PDF: diagrama da arquitetura (OBRIGATÓRIO p/ Forms)
-│   ├── arquitetura.png           → imagem do diagrama (referenciada no README)
-│   ├── apresentacao.pptx         → PPT/slides do pitch (opcional)
-│   ├── video/
-│   │   └── link.md               → arquivo texto com o LINK do vídeo
-│   │                               (ou o .mp4, se couber no repositório)
-│   └── imagens/                  → prints de tela, GIFs, mockups da demo
-│
-└── LICENSE / NOTICE           ← propriedade intelectual da GFT; autoria dos participantes
+├── src/
+│   ├── core/
+│   │   ├── agent.py       # Módulo de integração com o Gemini AI
+│   │   ├── guardrail.py   # Módulo de validação de risco (Pydantic)
+│   │   └── logger.py      # Módulo de logging estruturado
+│   ├── tools/
+│   │   ├── screener.py    # Ferramenta para coleta de indicadores técnicos
+│   │   └── news_parser.py # Ferramenta para coleta de notícias
+│   └── main.py            # Orquestrador principal do pipeline
+├── Dockerfile             # Definição do container da aplicação
+└── requirements.txt       # Dependências Python do projeto
 ```
 
-### Onde gravar cada tipo de arquivo
+## Pré-requisitos
 
-- **Código e prompts** → `src/`. Inclua um `requirements.txt` ou instruções de setup se houver código executável.
-- **Dados** → `data/`. Apenas mock, público ou sintético. Documente a origem/geração dos dados.
-- **One-pager** → `docs/one-pager.pdf` (formato PDF).
-- **Diagrama de arquitetura** → `docs/arquitetura.pdf` (para o Forms) e uma versão `.png` em `docs/` para exibir no README.
-- **Apresentação / slides** → `docs/apresentacao.pptx` (ou PDF).
-- **Vídeo** → prefira um **link** (Sharepoint GFT ou no próprio Gitlab) registrado em `docs/video/link.md`. Só suba o `.mp4` no repositório se o tamanho permitir (verificar a necessidade de dividir em arquivos menores)
-- **Imagens, prints e GIFs** da demo → `docs/imagens/`.
+*   Python 3.12+
+*   Docker
+*   Google Cloud SDK (`gcloud`)
+*   Um projeto no Google Cloud com as seguintes APIs habilitadas:
+    *   Artifact Registry (`artifactregistry.googleapis.com`)
+    *   Cloud Build (`cloudbuild.googleapis.com`)
+    *   Cloud Run (`run.googleapis.com`)
+    *   Vertex AI (`aiplatform.googleapis.com`)
+    *   Cloud Scheduler (`cloudscheduler.googleapis.com`)
 
----
+## Como Executar Localmente
 
-## ✅ Checklist antes de submeter
+1.  **Crie e ative um ambiente virtual:**
+    ```bash
+    python -m venv .venv
+    source .venv/bin/activate
+    ```
 
-- [ ] README preenchido (campos `[ ]` substituídos, comentários removidos)
-- [ ] Demo funcional acessível pelo link
-- [ ] Vídeo (pitch + demo) publicado e linkado
-- [ ] One-pager em **PDF** em `docs/`
-- [ ] Diagrama de arquitetura em **PDF** em `docs/`
-- [ ] Somente dados mock/públicos/sintéticos no repositório
-- [ ] Equipe e capitão preenchidos corretamente
-- [ ] Formulário de **Submissão do Projeto** enviado (link demo, link vídeo, arquitetura PDF, one-pager PDF)
+2.  **Instale as dependências:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+3.  **Execute o pipeline principal:**
+    ```bash
+    python -m src.main
+    ```
+
+## Como Fazer o Deploy na Nuvem (Cloud Run)
+
+1.  **Configure a autenticação do Docker com o Artifact Registry:**
+    ```bash
+    gcloud auth configure-docker us-central1-docker.pkg.dev
+    ```
+
+2.  **Construa a imagem Docker localmente, apontando para o seu repositório:**
+    *(Substitua `<PROJECT_ID>` e `<REPO_NAME>` pelos valores do seu projeto)*
+    ```bash
+    docker build -t us-central1-docker.pkg.dev/<PROJECT_ID>/<REPO_NAME>/guardrail-agent:latest .
+    ```
+
+3.  **Envie a imagem para o Artifact Registry:**
+    ```bash
+    docker push us-central1-docker.pkg.dev/<PROJECT_ID>/<REPO_NAME>/guardrail-agent:latest
+    ```
+
+4.  **Implante o Cloud Run Job usando a imagem enviada:**
+    ```bash
+    gcloud run jobs deploy guardrail-agent-job \
+      --image us-central1-docker.pkg.dev/<PROJECT_ID>/<REPO_NAME>/guardrail-agent:latest \
+      --region us-central1
+    ```
+
+## Como Executar na Nuvem
+
+*   **Manualmente (para teste):**
+    ```bash
+    gcloud run jobs execute guardrail-agent-job --region us-central1
+    ```
+*   **Automaticamente:**
+    Configure um **Cloud Scheduler** para invocar a URI do Cloud Run Job em uma programação cron.
+
