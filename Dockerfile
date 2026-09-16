@@ -8,8 +8,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Cópia do código-fonte
+# Cópia do código-fonte e configurações
 COPY ./src ./src
+COPY ./config ./config
 
 # Comando de inicialização do pipeline
-CMD ["python", "-m", "src.main"]
+CMD ["python", "src/main.py"]

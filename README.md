@@ -143,19 +143,38 @@ flowchart LR
 
 ## ☁️ Deploy no Google Cloud (Cloud Run Jobs)
 
-1. **Build da Imagem Docker:**
+### 🚀 Deploy Automatizado com 1 Comando (Recomendado)
+
+- **Linux / macOS / WSL:**
+  ```bash
+  ./scripts/deploy_cloud_run.sh
+  ```
+
+- **Windows PowerShell:**
+  ```powershell
+  .\scripts\deploy_cloud_run.ps1
+  ```
+
+---
+
+### 🛠️ Deploy Manual Passo a Passo
+
+1. **Build e Push da Imagem (via Google Cloud Build):**
    ```bash
-   docker build -t us-central1-docker.pkg.dev/<PROJECT_ID>/<REPO_NAME>/guardrail-agent:latest .
+   gcloud builds submit --tag us-central1-docker.pkg.dev/<PROJECT_ID>/guardrail-artifacts/guardrail-agent-job:latest .
    ```
 
 2. **Deploy do Cloud Run Job:**
    ```bash
    gcloud run jobs deploy guardrail-agent-job \
-     --image us-central1-docker.pkg.dev/<PROJECT_ID>/<REPO_NAME>/guardrail-agent:latest \
-     --region us-central1
+     --image us-central1-docker.pkg.dev/<PROJECT_ID>/guardrail-artifacts/guardrail-agent-job:latest \
+     --region us-central1 \
+     --set-env-vars="CLIENTS_CONFIG_FILE=config/clients.json" \
+     --memory=1Gi \
+     --cpu=1
    ```
 
-3. **Execução Manual do Job:**
+3. **Execução Manual do Job no GCP:**
    ```bash
    gcloud run jobs execute guardrail-agent-job --region us-central1
    ```
