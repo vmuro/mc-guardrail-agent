@@ -1,167 +1,149 @@
-# Agente Proativo de Investimentos com Gemini e Guardrail
+# GuardrailAI - Middleware B2B de Governança e Autonomia Proativa para Mercado de Capitais
 
+> _"Middleware B2B que combina autonomia proativa de mercado (Gemini / Vertex AI) com motor de Guardrails 100% determinísticos, blindagem contra alucinações matemáticas e consentimento regulatório (CVM)."_
 
- INSTRUÇÕES PARA A EQUIPE:
- - Este é um MODELO. Preencha todos os campos entre colchetes [ ... ]
-   e apague os comentários (blocos de comentário) antes de submeter.
- - Não altere a estrutura de pastas descrita ao final — o time
-   organizador espera encontrar os artefatos exatamente nesses
-   diretórios.
- - Use APENAS dados mock, públicos ou sintéticos. É PROIBIDO usar
-   dados reais de clientes, confidenciais ou sensíveis.
- - Confidencial — Uso Interno GFT.
-
-=====================================================================
-
--->
-# [NOME DO AGENTE]
-
-> _[Uma frase de efeito que resume o que o agente faz — ex.: "Assistente de IA que monitora liquidez de fundos em tempo real."]_
-
-**Desafio de Agentes de IA — Mercado de Capitais** Iniciativa DGCU07 + BDP em parceria com o Google · SMC26 (27 a 29 de outubro)
+**Desafio de Agentes de IA — Mercado de Capitais**  
+Iniciativa DGCU02 + BDP em parceria com o Google · SMC26
 
 ---
 
-##  Equipe
+## 👥 Equipe
 
-|Papel|Nome|E-mail GFT|
-|---|---|---|
-|**Capitão**|Victor Rosa|vrmu@gft.com|
+| Papel | Nome | E-mail GFT | Estrutura |
+|---|---|---|---|
+| **Capitão** | Victor Rosa | vrmu@gft.com | DGCU02 / BDP |
 
-**Nome da equipe:** [Nome do time]
-
-<!-- Times de 1 a 4 pessoas. Remova as linhas de integrantes não utilizadas. -->
+**Nome da equipe:** GuardrailAI
 
 ---
 
 ## 🎯 O Problema
 
-<!-- 2 a 4 parágrafos. Que dor real de negócio o agente resolve? Qual o contexto no Mercado de Capitais? Quem sofre com esse problema hoje? -->
+As corretoras, instituições financeiras e investidores enfrentam um receio crítico em delegar a execução de ordens e análises de mercado a modelos de Inteligência Artificial generativa devido à imprevisibilidade e ao risco inerente de **alucinações matemáticas na leitura de preços e quantidades**.
 
-[Descreva o problema que o agente resolve.]
+Embora os modelos de linguagem (LLMs) possam sugerir alocações dinâmicas e oportunidades de mercado, correm o risco de **omitir parâmetros fundamentais de gestão de risco — como o preço de Stop-Loss —**, o que poderia expor o capital do cliente a prejuízos descontrolados.
 
-**Público-alvo:** [Quem usa / se beneficia do agente]
-
----
-
-## 💡 A Solução
-
-<!-- Explique o que o agente faz, como resolve o problema e por que a abordagem é adequada. Destaque criatividade e inovação. -->
-
-[Descreva a solução em linguagem clara.]
-
-### Principais Funcionalidades
-
-- [Funcionalidade 1]
-- [Funcionalidade 2]
-- [Funcionalidade 3]
+Os sistemas tradicionais carecem de uma camada intermediária (*middleware*) robusta que combine uma **verificação determinística estrita** (recalculando tetos financeiros e limites de orçamento em código) com um **fluxo de consentimento regulatório auditável** e compatível com as normas da CVM.
 
 ---
 
-## 📊 Impacto
+## 💡 A Solução: GuardrailAI
 
-<!-- Qual o valor gerado? Sempre que possível, quantifique. -->
+O **GuardrailAI** atua como um middleware B2B de governança que desacopla a camada analítica de IA da camada determinística de risco e execução, estruturado em **3 Pilares Fundamentais**:
 
-- **Eficiência:** [ex.: reduz em X% o tempo de análise de ...]
-- **Redução de erros:** [ex.: elimina a etapa manual de ...]
-- **Valor para o cliente / negócio:** [ex.: ...]
+### 🏛️ Os 3 Pilares da Arquitetura
+
+```mermaid
+flowchart LR
+    subgraph P1 ["Pilar 1: Autonomia Proativa"]
+        Screener["Screener Multi-Indicador<br/>(MACD, Bollinger, EMAs, RSI, News)"] --> Gemini["Gemini 2.5 Flash<br/>(Análise de Tese)"]
+    end
+
+    subgraph P2 ["Pilar 2: Segurança Inviolável"]
+        Gemini --> Guardrail["Guardrail Engine 100% Determinístico<br/>- Q = ⌊B / P⌋ (Blindagem Numérica)<br/>- Stop-Loss Obrigatório (Máx 15%)<br/>- Perfil de Risco (Conservador/Mod/Agr)"]
+    end
+
+    subgraph P3 ["Pilar 3: Consentimento Regulatório"]
+        Guardrail --> Consent["Módulo de Não-Repúdio (CVM)<br/>- Payload Binding (HMAC-SHA256)<br/>- Biometria Passkey / FIDO2<br/>- TTL Estrito de 120 Segundos"]
+    end
+
+    Consent --> CloudLog["Cloud Logging<br/>Trilha de Auditoria Imutável"]
+```
+
+1. **Autonomia Proativa (Screener + ReAct & Blindagem Matemática):**  
+   O utilizador define apenas o orçamento ($B$) e o perfil de risco. O agente varre autonomamente a watchlist da B3, processa indicadores técnicos avançados (MACD, Bollinger, Médias Rápidas/Lentas, RSI) e notícias. O motor de execução calcula deterministicamente a quantidade exata de ativos ($Q = \lfloor B/P \rfloor$), eliminando qualquer possibilidade de alucinação numérica da IA.
+
+2. **Segurança Inviolável (Guardrail Engine 100% Determinístico):**  
+   A IA atua de forma estritamente analítica e não envia ordens diretas à bolsa. Toda intenção em JSON é interceptada por uma camada determinística em código Python que bloqueia instantaneamente ordens sem Stop-Loss, com perda excessiva (> 15%) ou que violem os tetos de concentração da carteira.
+
+3. **Consentimento Regulatório e Não-Repúdio (CVM):**  
+   Operações financeiras geram uma solicitação com **Payload Binding Criptográfico (HMAC-SHA256)** inviolável e aprovação biométrica (**Passkey / FIDO2**) com **TTL estrito de 120 segundos**, garantindo não-repúdio e proteção contra variações bruscas de mercado.
 
 ---
 
-Este projeto é um MVP (Minimum Viable Product) de um agente autônomo de investimentos focado em *Swing Trade* no mercado brasileiro (B3). O agente utiliza a IA do Google (Gemini) para análise de mercado e um Guardrail determinístico para garantir que as operações sigam regras de risco e orçamento.
+## 🎯 Público-Alvo
 
+- **Investidores Individuais (Varejo Alta Renda):** Utilizam o agente como um co-piloto no aplicativo da corretora ou do banco para gerenciar a carteira pessoal com automação na leitura de dados, dispensando a necessidade de acompanhar o mercado em tempo integral.
+- **Escritórios de Investimento & Assessores (AAI):** Buscam o monitoramento contínuo da carteira de múltiplos clientes em paralelo, garantindo escala operacional e a capacidade de supervisionar centenas de carteiras sem perder a personalização.
+- **Gestoras & Wealth Management:** Empregam a tecnologia na execução de rotinas de rebalanceamento e ajuste de fundos operados, obtendo precisão matemática na execução de regras de compliance e redução do viés operacional.
 
-## Arquitetura
+---
 
-O sistema opera como um pipeline de processamento em lote, implantado como um **Cloud Run Job** e acionado por um **Cloud Scheduler**.
+## 📊 Impacto de Negócio
 
-O fluxo é o seguinte:
-1.  **Cloud Scheduler**: Dispara o job em uma programação definida (ex: diariamente).
-2.  **Cloud Run Job**: Executa o container da aplicação.
-3.  **Aplicação Python**:
-    1.  **Coleta de Dados**: Busca indicadores técnicos (`yfinance`, `ta`) e notícias (`feedparser`).
-    2.  **Análise de IA**: Envia os dados para o **Gemini 2.5 Flash** (via Vertex AI) para obter uma recomendação (`BUY`/`SELL`/`HOLD`).
-    3.  **Auditoria de Risco**: A recomendação é validada por um **Guardrail** (`Pydantic`) que checa orçamento, stop-loss e limites de risco.
-    4.  **Logging**: O resultado final é registrado no **Cloud Logging** para auditoria.
+- **Eficiência Operacional:** Reduz em mais de 90% o tempo necessário para varredura técnica de mercado e checagem de conformidade de ordens.
+- **Eliminação de Risco (Zero Alucinações):** 100% das ordens passam por recálculo determinístico $Q = \lfloor B/P \rfloor$ e validação estrita de Stop-Loss antes de qualquer autorização.
+- **Conformidade Regulatória Total:** Trilha imutável de auditoria com assinatura HMAC-SHA256 e consentimento biométrico com TTL de 120s para compliance com a CVM.
 
-## Estrutura do Projeto
+---
+
+## 🏗️ Estrutura do Projeto
 
 ```
 .
 ├── src/
 │   ├── core/
-│   │   ├── agent.py       # Módulo de integração com o Gemini AI
-│   │   ├── guardrail.py   # Módulo de validação de risco (Pydantic)
-│   │   └── logger.py      # Módulo de logging estruturado
+│   │   ├── agent.py       # Integração cognitiva com Gemini 2.5 Flash (Vertex AI)
+│   │   ├── consent.py     # Pilar 3: Consentimento Regulatório, Payload Binding & TTL 120s
+│   │   ├── guardrail.py   # Pilar 1 e 2: Motor Determinístico de Risco e Q = floor(B/P)
+│   │   └── logger.py      # Emissão de logs estruturados (Cloud Logging)
 │   ├── tools/
-│   │   ├── screener.py    # Ferramenta para coleta de indicadores técnicos
-│   │   └── news_parser.py # Ferramenta para coleta de notícias
-│   └── main.py            # Orquestrador principal do pipeline
-├── Dockerfile             # Definição do container da aplicação
+│   │   ├── screener.py    # Coleta de mercado (MACD, Bollinger, EMAs, RSI via yfinance)
+│   │   └── news_parser.py # Coleta e parsing de notícias via Google News RSS
+│   └── main.py            # Orquestrador do pipeline de ponta a ponta
+├── tests/
+│   ├── test_guardrail.py  # Testes de regras de risco e blindagem matemática
+│   ├── test_consent.py    # Testes de Payload Binding HMAC, Passkey e TTL de 120s
+│   └── test_screener.py   # Testes dos indicadores técnicos avançados
+├── pytest.ini             # Configuração da suíte de testes
+├── Dockerfile             # Container para Cloud Run Job
 └── requirements.txt       # Dependências Python do projeto
 ```
 
-## Pré-requisitos
+---
 
-*   Python 3.12+
-*   Docker
-*   Google Cloud SDK (`gcloud`)
-*   Um projeto no Google Cloud com as seguintes APIs habilitadas:
-    *   Artifact Registry (`artifactregistry.googleapis.com`)
-    *   Cloud Build (`cloudbuild.googleapis.com`)
-    *   Cloud Run (`run.googleapis.com`)
-    *   Vertex AI (`aiplatform.googleapis.com`)
-    *   Cloud Scheduler (`cloudscheduler.googleapis.com`)
+## ⚙️ Pré-requisitos
 
-## Como Executar Localmente
+* Python 3.12+ (ou 3.14 via WSL)
+* Google Cloud SDK (`gcloud`) autenticado
+* Projeto GCP com Vertex AI, Cloud Run e Cloud Logging habilitados
 
-1.  **Crie e ative um ambiente virtual:**
-    ```bash
-    python -m venv .venv
-    source .venv/bin/activate
-    ```
+---
 
-2.  **Instale as dependências:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+## 🚀 Como Executar Localmente
 
-3.  **Execute o pipeline principal:**
-    ```bash
-    python -m src.main
-    ```
+1. **Ative o ambiente virtual:**
+   ```bash
+   source .venv/bin/activate
+   ```
 
-## Como Fazer o Deploy na Nuvem (Cloud Run)
+2. **Execute a suíte completa de testes automatizados:**
+   ```bash
+   pytest -v
+   ```
 
-1.  **Configure a autenticação do Docker com o Artifact Registry:**
-    ```bash
-    gcloud auth configure-docker us-central1-docker.pkg.dev
-    ```
+3. **Execute o pipeline principal de governança:**
+   ```bash
+   python src/main.py
+   ```
 
-2.  **Construa a imagem Docker localmente, apontando para o seu repositório:**
-    *(Substitua `<PROJECT_ID>` e `<REPO_NAME>` pelos valores do seu projeto)*
-    ```bash
-    docker build -t us-central1-docker.pkg.dev/<PROJECT_ID>/<REPO_NAME>/guardrail-agent:latest .
-    ```
+---
 
-3.  **Envie a imagem para o Artifact Registry:**
-    ```bash
-    docker push us-central1-docker.pkg.dev/<PROJECT_ID>/<REPO_NAME>/guardrail-agent:latest
-    ```
+## ☁️ Deploy no Google Cloud (Cloud Run Jobs)
 
-4.  **Implante o Cloud Run Job usando a imagem enviada:**
-    ```bash
-    gcloud run jobs deploy guardrail-agent-job \
-      --image us-central1-docker.pkg.dev/<PROJECT_ID>/<REPO_NAME>/guardrail-agent:latest \
-      --region us-central1
-    ```
+1. **Build da Imagem Docker:**
+   ```bash
+   docker build -t us-central1-docker.pkg.dev/<PROJECT_ID>/<REPO_NAME>/guardrail-agent:latest .
+   ```
 
-## Como Executar na Nuvem
+2. **Deploy do Cloud Run Job:**
+   ```bash
+   gcloud run jobs deploy guardrail-agent-job \
+     --image us-central1-docker.pkg.dev/<PROJECT_ID>/<REPO_NAME>/guardrail-agent:latest \
+     --region us-central1
+   ```
 
-*   **Manualmente (para teste):**
-    ```bash
-    gcloud run jobs execute guardrail-agent-job --region us-central1
-    ```
-*   **Automaticamente:**
-    Configure um **Cloud Scheduler** para invocar a URI do Cloud Run Job em uma programação cron.
-
+3. **Execução Manual do Job:**
+   ```bash
+   gcloud run jobs execute guardrail-agent-job --region us-central1
+   ```

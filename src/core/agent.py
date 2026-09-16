@@ -7,27 +7,24 @@ LOCATION = "us-central1"
 MODEL_NAME = "gemini-2.5-flash"
 
 SYSTEM_INSTRUCTION = """
-Você é um estrategista e analista sênior de investimentos focado em Swing Trade e gestão de portfólio na B3.
-Sua missão é analisar o snapshot de mercado consolidado (preço, RSI_14, Médias EMA9/EMA21/SMA20/SMA200, MACD, Bandas de Bollinger e Notícias recentes) para cada ativo da watchlist e construir uma proposta de alocação de portfólio diversificada e prudente.
+Você é o módulo de análise cognitiva do GuardrailAI, um middleware B2B de governança de investimentos focado no mercado de capitais brasileiro (B3).
+Sua missão é analisar o snapshot consolidado de mercado (preço real, RSI_14, Médias EMA9/EMA21/SMA20/SMA200, MACD, Bandas de Bollinger e Notícias recentes) para cada ativo da watchlist e formular a tese de alocação de mercado.
 
-Critérios de Decisão Técnica e Estratégica:
-1. **Tendência e Momentum**:
+Responsabilidades do Analista de IA:
+1. **Identificação de Oportunidades Técnicas e Fundamentais**:
    - Tendência de alta: EMA 9 > EMA 21 e preço acima da SMA 200.
-   - Reversão / Recuperação: RSI em região de sobrevenda (< 35) com inflexão positiva do MACD Histogram (macd_diff > 0) ou repique na Banda Inferior de Bollinger.
-2. **Construção de Portfólio e Diversificação**:
-   - Analise TODOS os ativos fornecidos no snapshot.
-   - Defina uma ação ("BUY", "HOLD" ou "SELL") para cada ativo.
-   - Respeite o orçamento máximo total fornecido (`user_budget`).
-   - Não concentre mais de 35% do orçamento total em um único ativo (teto de alocação prudente por ativo).
-3. **Gestão de Risco para Compras (BUY)**:
-   - Para cada ordem de "BUY", determine a quantidade inteira de ações (`quantity`), o preço unitário de referência (`unit_price`) e obrigatoriamente um preço de stop loss de segurança (`stop_loss_price`).
-   - O `stop_loss_price` deve ser estritamente menor que `unit_price`, posicionado em suportes técnicos ou médias, com perda máxima não superior a 15% do preço de entrada.
-4. **Formato de Resposta**:
-   - Responda SEMPRE E EXCLUSIVAMENTE em formato JSON estruturado válido, sem tags markdown adicionais.
+   - Sinais de exaustão/sobrecompra: RSI > 70 ou toque na Banda Superior de Bollinger (sugira HOLD ou SELL).
+   - Sinais de reversão/recuperação: RSI < 35 com inflexão do MACD histograma (macd_diff > 0).
+2. **Definição de Ações e Estratégia de Risco**:
+   - Para cada ativo da watchlist, defina uma ação ("BUY", "HOLD" ou "SELL").
+   - Para ordens "BUY", sugira o preço de entrada de referência (`unit_price`) e obrigatoriamente um preço de stop loss de segurança (`stop_loss_price`) posicionado abaixo de suportes técnicos.
+   - A quantidade exata de ações será recalculada deterministicamente pelo motor de governança para blindar contra erros de cálculo.
+3. **Formato Exclusivo de Resposta**:
+   - Responda SEMPRE E EXCLUSIVAMENTE em formato JSON estruturado válido.
 
-Esquema JSON obrigatório:
+Esquema JSON esperado:
 {
-  "portfolio_rationale": "Resumo macro da tese e distribuição de capital no portfólio.",
+  "portfolio_rationale": "Resumo macro da tese e oportunidades identificadas no mercado.",
   "allocations": [
     {
       "ticker": "TICKER.SA",
@@ -35,7 +32,7 @@ Esquema JSON obrigatório:
       "quantity": 100,
       "unit_price": 0.0,
       "stop_loss_price": 0.0,
-      "rationale": "Explicação técnica e fundamentalista da recomendação."
+      "rationale": "Tese fundamentada com base em técnica e notícias."
     }
   ]
 }
@@ -51,10 +48,14 @@ def get_client() -> genai.Client:
     )
 
 
-def analyze_market_with_gemini(market_snapshot: list[dict], user_budget: float = 5000.0) -> dict:
+def analyze_market_with_gemini(
+    market_snapshot: list[dict],
+    user_budget: float = 5000.0,
+    risk_profile: str = "MODERATE"
+) -> dict:
     """
-    Envia o snapshot completo de mercado e o orçamento para o Gemini 2.5 Flash
-    estruturar a proposta de portfólio multi-ativo.
+    Envia o snapshot completo de mercado e parâmetros do investidor para o Gemini 2.5 Flash
+    estruturar a proposta de análise e teses de investimento.
     """
     client = get_client()
 
@@ -62,10 +63,11 @@ def analyze_market_with_gemini(market_snapshot: list[dict], user_budget: float =
 Snapshot Consolidado de Mercado (Indicadores Técnicos + Notícias):
 {json.dumps(market_snapshot, indent=2, ensure_ascii=False)}
 
-Orçamento Máximo Total Disponível: R$ {user_budget:.2f}
-Teto Máximo de Concentração por Ativo: R$ {user_budget * 0.35:.2f} (35%)
+Parâmetros do Investidor:
+- Orçamento Total Disponível: R$ {user_budget:.2f}
+- Perfil de Risco Declarado: {risk_profile}
 
-Analise todos os ativos e retorne a proposta de alocação de portfólio no esquema JSON especificado.
+Analise todos os ativos da watchlist e formule a proposta no esquema JSON especificado.
 """
 
     config = types.GenerateContentConfig(
@@ -84,7 +86,7 @@ Analise todos os ativos e retorne a proposta de alocação de portfólio no esqu
         return json.loads(response.text)
     except json.JSONDecodeError:
         return {
-            "portfolio_rationale": f"Falha ao interpretar resposta do modelo: {response.text}",
+            "portfolio_rationale": f"Falha no parsing da resposta do modelo: {response.text}",
             "allocations": [
                 {
                     "ticker": item.get("ticker", "UNKNOWN"),
@@ -92,7 +94,7 @@ Analise todos os ativos e retorne a proposta de alocação de portfólio no esqu
                     "quantity": 0,
                     "unit_price": item.get("current_price", 0.0),
                     "stop_loss_price": 0.0,
-                    "rationale": "Fallback para HOLD devido a erro no parsing do JSON retornado."
+                    "rationale": "Fallback para HOLD devido a erro no processamento JSON."
                 }
                 for item in market_snapshot
             ]
@@ -115,27 +117,10 @@ if __name__ == "__main__":
             "bollinger_high": 40.50,
             "bollinger_low": 37.80,
             "bollinger_pband": 0.25,
-            "recent_news": ["Petrobras aprova novos dividendos e investimentos robustos."]
-        },
-        {
-            "ticker": "VALE3.SA",
-            "current_price": 62.10,
-            "rsi_14": 55.0,
-            "ema_9": 61.50,
-            "ema_21": 60.80,
-            "sma_20": 60.50,
-            "sma_200": 58.00,
-            "macd": 0.80,
-            "macd_signal": 0.65,
-            "macd_diff": 0.15,
-            "bollinger_high": 64.00,
-            "bollinger_low": 59.00,
-            "bollinger_pband": 0.62,
-            "recent_news": ["Demanda por minério se estabiliza na Ásia."]
+            "recent_news": ["Petrobras aprova novos dividendos."]
         }
     ]
 
-    print(f"🤖 Consultando {MODEL_NAME} para proposta de portfólio multi-ativo...")
-    resultado = analyze_market_with_gemini(mock_data, user_budget=5000.0)
-    print("\nProposta Estruturada da IA:")
+    print(f"🤖 Consultando Gemini 2.5 Flash no GuardrailAI...")
+    resultado = analyze_market_with_gemini(mock_data, user_budget=5000.0, risk_profile="MODERATE")
     print(json.dumps(resultado, indent=2, ensure_ascii=False))
