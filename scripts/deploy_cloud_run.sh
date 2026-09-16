@@ -22,8 +22,10 @@ REGION=${REGION:-"us-central1"}
 REPO_NAME=${REPO_NAME:-"repo-guardrailai"}
 IMAGE_NAME=${IMAGE_NAME:-"guardrail-agent"}
 JOB_NAME=${JOB_NAME:-"guardrail-agent-job"}
+EMAIL_ACCOUNT=${EMAIL_ACCOUNT:-"658856974250-compute@developer.gserviceaccount.com"}
 IMAGE_TAG=${IMAGE_TAG:-"latest"}
 BUILD_METHOD=${BUILD_METHOD:-"docker"} # "docker" (local) ou "cloud-build" (remoto)
+
 
 IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}:${IMAGE_TAG}"
 
@@ -86,9 +88,12 @@ echo -e "\n👉 ${YELLOW}Para executar o Job agora no GCP:${NC}"
 echo -e "   gcloud run jobs execute ${JOB_NAME} --region=${REGION}"
 echo -e "\n👉 ${YELLOW}Para agendar via Cloud Scheduler (Segunda a Sexta às 09:30):${NC}"
 echo -e "   gcloud scheduler jobs create http trigger-${JOB_NAME} \\"
+echo -e "     --location=${REGION} \\"
 echo -e "     --schedule=\"30 9 * * 1-5\" \\"
 echo -e "     --time-zone=\"America/Sao_Paulo\" \\"
-echo -e "     --uri=\"https://${REGION}-run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/${JOB_NAME}:run\" \\"
+echo -e "     --uri=\"https://run.googleapis.com/v2/projects/${PROJECT_ID}/locations/${REGION}/jobs/${JOB_NAME}:run\" \\"
 echo -e "     --http-method=POST \\"
-echo -e "     --oauth-service-account-email=\"\$(gcloud config get-value account)\""
+echo -e "     --oauth-service-account-email=\"${EMAIL_ACCOUNT}\" \\"
+echo -e "     --oauth-token-scope=\"https://www.googleapis.com/auth/cloud-platform\""
 echo -e "\n${GREEN}🎉 Processo concluído com sucesso!${NC}"
+
