@@ -123,9 +123,21 @@ flowchart LR
    ```
 
 3. **Execute o pipeline principal de governança:**
-   ```bash
-   python src/main.py
-   ```
+
+   - **Modo Padrão (Cliente Único):**
+     ```bash
+     python src/main.py
+     ```
+
+   - **Modo Dinâmico via CLI:**
+     ```bash
+     python src/main.py --client-id "investidor_vip_007" --budget 12000 --risk "AGGRESSIVE" --watchlist "PETR4.SA,VALE3.SA,ITUB4.SA"
+     ```
+
+   - **Modo Lote Multi-Carteiras (AAI / Gestoras de Wealth Management):**
+     ```bash
+     python src/main.py --config config/clients.json
+     ```
 
 ---
 
