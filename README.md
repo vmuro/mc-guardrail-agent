@@ -145,36 +145,36 @@ flowchart LR
 
 ### 🚀 Deploy Automatizado com 1 Comando (Recomendado)
 
-- **Linux / macOS / WSL:**
-  ```bash
-  ./scripts/deploy_cloud_run.sh
-  ```
-
-- **Windows PowerShell:**
-  ```powershell
-  .\scripts\deploy_cloud_run.ps1
-  ```
+```bash
+./scripts/deploy_cloud_run.sh
+```
 
 ---
 
-### 🛠️ Deploy Manual Passo a Passo
+### 🛠️ Deploy Manual Passo a Passo (Docker Local)
 
-1. **Build e Push da Imagem (via Google Cloud Build):**
-   ```bash
-   gcloud builds submit --tag us-central1-docker.pkg.dev/<PROJECT_ID>/guardrail-artifacts/guardrail-agent-job:latest .
-   ```
+```bash
+# 1. Autenticar o Docker com o Artifact Registry do Google Cloud
+gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
-2. **Deploy do Cloud Run Job:**
-   ```bash
-   gcloud run jobs deploy guardrail-agent-job \
-     --image us-central1-docker.pkg.dev/<PROJECT_ID>/guardrail-artifacts/guardrail-agent-job:latest \
-     --region us-central1 \
-     --set-env-vars="CLIENTS_CONFIG_FILE=config/clients.json" \
-     --memory=1Gi \
-     --cpu=1
-   ```
+# 2. Construir a imagem localmente
+docker build -t us-central1-docker.pkg.dev/gft-brazil-bu-gcp/repo-guardrailai/guardrail-agent:latest .
 
-3. **Execução Manual do Job no GCP:**
-   ```bash
-   gcloud run jobs execute guardrail-agent-job --region us-central1
-   ```
+# 3. Enviar a imagem para o repositório da equipe
+docker push us-central1-docker.pkg.dev/gft-brazil-bu-gcp/repo-guardrailai/guardrail-agent:latest
+
+# 4. Criar ou atualizar o Cloud Run Job apontando para a imagem
+gcloud run jobs deploy guardrail-agent-job \
+  --image us-central1-docker.pkg.dev/gft-brazil-bu-gcp/repo-guardrailai/guardrail-agent:latest \
+  --region us-central1 \
+  --set-env-vars="CLIENTS_CONFIG_FILE=config/clients.json" \
+  --memory=1Gi \
+  --cpu=1
+```
+
+### 🧪 Como Executar na Nuvem
+
+- **Execução Manual:**
+  ```bash
+  gcloud run jobs execute guardrail-agent-job --region us-central1
+  ```
