@@ -6,8 +6,8 @@ from src.main import load_job_configuration
 
 
 def test_load_single_client_defaults():
-    """Valida o carregamento dos parâmetros padrão quando nenhum argumento é passado."""
-    with patch("sys.argv", ["main.py"]):
+    """Valida o carregamento dos parâmetros padrão quando nenhum arquivo de configuração é encontrado."""
+    with patch("sys.argv", ["main.py"]), patch("os.path.exists", return_value=False):
         clients = load_job_configuration()
         assert len(clients) == 1
         assert clients[0]["client_id"] == "client_retail_001"

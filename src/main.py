@@ -4,8 +4,10 @@ import json
 import argparse
 from typing import List, Dict, Any
 
-# Ajuste de path para importações diretas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Garante que a raiz do repositório esteja no PYTHONPATH
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
 
 from src.tools.screener import get_technical_indicators
 from src.tools.news_parser import get_stock_news
@@ -19,10 +21,10 @@ def load_job_configuration() -> List[Dict[str, Any]]:
     """
     Carrega a configuração dos clientes para a execução do Job no Cloud Run.
     Ordem de precedência:
-    1. Arquivo de configuração JSON via CLI (--config) ou Env Var (CLIENTS_CONFIG_FILE)
-    2. Parâmetros individuais via CLI (--client-id, --budget, --risk-profile, --watchlist)
-    3. Variáveis de ambiente (CLIENT_ID, USER_BUDGET, RISK_PROFILE, WATCHLIST)
-    4. Valores padrão de fallback
+    1. Se --config (-f) foi explicitamente informado na CLI ou CLIENTS_CONFIG_FILE em os.environ, carrega o arquivo.
+    2. Se --client-id, --budget, etc. foram passados na CLI, constrói cliente individual.
+    3. Se existir config/clients.json ou clients.json, carrega o lote.
+    4. Caso contrário, retorna cliente padrão de fallback.
     """
     parser = argparse.ArgumentParser(
         description="GuardrailAI: Middleware B2B de Governança para Mercado de Capitais (B3)"
@@ -60,16 +62,43 @@ def load_job_configuration() -> List[Dict[str, Any]]:
         help="Lista de tickers separados por vírgula"
     )
 
-    args, _ = parser.parse_known_args()
+    args, unknown = parser.parse_known_args()
 
-    # Se um arquivo de configuração de múltiplos clientes foi especificado
-    if args.config and os.path.exists(args.config):
-        with open(args.config, "r", encoding="utf-8") as f:
-            clients_data = json.load(f)
-            if isinstance(clients_data, list) and len(clients_data) > 0:
-                return clients_data
+    # Verifica se a flag --config ou -f foi passada explicitamente na linha de comando
+    config_specified_in_cli = any(arg in sys.argv for arg in ["--config", "-f"])
+    cli_single_specified = any(arg in sys.argv for arg in ["--client-id", "-c", "--budget", "-b", "--risk-profile", "-r", "--watchlist", "-w"])
 
-    # Caso contrário, utiliza a configuração de cliente único
+    if config_specified_in_cli or (args.config and not cli_single_specified):
+        config_path = args.config if os.path.isabs(args.config) else os.path.join(REPO_ROOT, args.config)
+        if os.path.exists(config_path):
+            with open(config_path, "r", encoding="utf-8") as f:
+                clients_data = json.load(f)
+                if isinstance(clients_data, list) and len(clients_data) > 0:
+                    return clients_data
+
+    # Se parâmetros de cliente individual foram passados na CLI
+    if cli_single_specified:
+        watchlist = [t.strip().upper() for t in args.watchlist.split(",") if t.strip()]
+        return [
+            {
+                "client_id": args.client_id,
+                "segment": "Investidor Individual",
+                "budget": args.budget,
+                "risk_profile": args.risk_profile,
+                "watchlist": watchlist
+            }
+        ]
+
+    # Fallback: Tenta carregar config/clients.json ou clients.json se existirem
+    for default_json in ["config/clients.json", "clients.json"]:
+        json_path = os.path.join(REPO_ROOT, default_json)
+        if os.path.exists(json_path):
+            with open(json_path, "r", encoding="utf-8") as f:
+                clients_data = json.load(f)
+                if isinstance(clients_data, list) and len(clients_data) > 0:
+                    return clients_data
+
+    # Fallback final: cliente único padrão
     watchlist = [t.strip().upper() for t in args.watchlist.split(",") if t.strip()]
     return [
         {
@@ -84,35 +113,33 @@ def load_job_configuration() -> List[Dict[str, Any]]:
 
 def collect_market_data(unique_tickers: List[str]) -> Dict[str, Any]:
     """
-    Coleta dados de mercado e notícias uma única vez para todos os tickers envolvidos,
-    otimizando requisições e tempo de execução do Cloud Run Job.
+    Coleta dados de mercado e notícias uma única vez para todos os tickers.
     """
     market_snapshot_by_ticker = {}
 
     for ticker in unique_tickers:
         print(f"  -> Coletando indicadores técnicos e notícias para: {ticker}...")
-        tech = get_technical_indicators(ticker, period="1y")
-        news = get_stock_news(ticker, max_items=2)
-
-        if tech:
-            tech["recent_news"] = news if news else ["Nenhuma notícia recente relevante."]
-            market_snapshot_by_ticker[ticker] = tech
+        try:
+            tech = get_technical_indicators(ticker, period="1y")
+            news = get_stock_news(ticker, max_items=2)
+            if tech:
+                tech["recent_news"] = news if news else ["Nenhuma notícia recente relevante."]
+                market_snapshot_by_ticker[ticker] = tech
+        except Exception as e:
+            print(f"⚠️ Erro ao coletar {ticker}: {e}")
 
     return market_snapshot_by_ticker
 
 
-def process_client_portfolio(
-    client_config: Dict[str, Any],
-    market_data: Dict[str, Any]
-):
+def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[str, Any]):
     """
-    Executa o pipeline completo de governança para a carteira de um cliente específico.
+    Executa o pipeline completo de governança para a carteira de um cliente.
     """
     client_id = client_config.get("client_id", "anonymous_client")
     segment = client_config.get("segment", "Varejo")
-    budget = float(client_config.get("budget", 5000.0))
+    budget = float(client_config.get("budget", client_config.get("allocated_budget", 5000.0)))
     risk_profile = client_config.get("risk_profile", "MODERATE")
-    watchlist = client_config.get("watchlist", [])
+    watchlist = client_config.get("watchlist", ["PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBDC4.SA"])
 
     print("\n" + "=" * 75)
     print(f"👤 PROCESSANDO INVESTIDOR: {client_id} ({segment})")
@@ -120,23 +147,22 @@ def process_client_portfolio(
     print(f"   Watchlist: {', '.join(watchlist)}")
     print("=" * 75)
 
-    # 1. Filtra snapshot de mercado para os ativos da watchlist deste cliente
     client_snapshot = [market_data[t] for t in watchlist if t in market_data]
-    market_prices = {t: market_data[t]["current_price"] for t in watchlist if t in market_data}
+    market_prices = {t: market_data[t]["current_price"] for t in watchlist if t in market_data and "current_price" in market_data[t]}
 
     if not client_snapshot:
         print(f"⚠️ Aviso: Não há dados de mercado disponíveis para a watchlist de {client_id}.")
         return
 
-    # 2. Tomada de Decisão com Gemini 2.5 Flash
-    print(f"\n🧠 [1/3] Consultando Gemini 2.5 Flash (Vertex AI) para tese de portfólio...")
+    # 1. Tomada de Decisão com LLM
+    print(f"\n🧠 [1/3] Consultando Gemini (Vertex AI) para tese de portfólio...")
     raw_decision = analyze_market_with_gemini(
         client_snapshot,
         user_budget=budget,
         risk_profile=risk_profile
     )
 
-    # 3. Interceptação e Auditoria do Guardrail (Pilares 1 e 2)
+    # 2. Interceptação e Auditoria do Guardrail
     print(f"🛡️ [2/3] Interceptando com Guardrail Engine (Q = ⌊B/P⌋, Stop-Loss e Perfil {risk_profile})...")
     audit = validate_portfolio_proposal(
         raw_decision,
@@ -146,7 +172,7 @@ def process_client_portfolio(
         auto_adjust_quantity=True
     )
 
-    # 4. Consentimento Regulatório e Não-Repúdio (Pilar 3)
+    # 3. Consentimento Regulatório e Não-Repúdio
     print(f"🔐 [3/3] Gerando Consentimento Regulatório CVM (Payload Binding HMAC + TTL 120s)...")
     consent_records = []
 
@@ -160,20 +186,21 @@ def process_client_portfolio(
                     "quantity": order.quantity,
                     "unit_price": order.unit_price,
                     "total_cost": order.total_cost,
-                    "stop_loss_price": order.stop_loss_price
+                    "stop_loss_price": order.stop_loss_price,
+                    "whatsapp_phone": client_config.get("whatsapp_phone"),
+                    "client_name": client_config.get("name", client_id)
                 },
                 user_id=client_id,
                 ttl_seconds=120
             )
 
-            # Simula autorização biométrica via Passkey/FIDO2 no app do cliente
             authorized = authorize_biometric_passkey(
                 challenge,
                 auth_method="PASSKEY_FIDO2_BIOMETRIC"
             )
             consent_records.append(authorized)
 
-    # 5. Emissão de Log Estruturado no Cloud Logging (Audit Trail CVM)
+    # 4. Log Estruturado
     log_event(
         event_type="GUARDRAIL_GOVERNANCE_AUDIT",
         data={
@@ -186,7 +213,7 @@ def process_client_portfolio(
             "remaining_budget": audit.remaining_budget,
             "approved_orders": [o.model_dump() for o in audit.approved_orders],
             "rejected_orders": [o.model_dump() for o in audit.rejected_orders],
-            "regulatory_consents": [c.model_dump() for c in consent_records],
+            "regulatory_consents": [c.model_dump() if hasattr(c, "model_dump") else c for c in consent_records],
             "cvm_compliance": {
                 "strict_deterministic_guardrail": True,
                 "mathematical_hallucination_shield": True,
@@ -197,7 +224,7 @@ def process_client_portfolio(
         }
     )
 
-    # 6. Relatório Visual da Carteira
+    # 5. Relatório Visual
     print("\n" + "-" * 75)
     print(f"📊 RESULTADO DE GOVERNANÇA: {client_id}")
     print(f"   Status: {audit.summary}")
@@ -215,7 +242,15 @@ def process_client_portfolio(
     if consent_records:
         print(f"\n🔐 NÃO-REPÚDIO & CVM COMPLIANCE:")
         for c in consent_records:
-            print(f"  - Desafio ID: {c.consent_id} | Status: {c.status} ({c.auth_method}) | TTL: 120s")
+            if isinstance(c, dict):
+                cid = c.get("consent_id", c.get("challenge_id", "n/a"))
+                status = c.get("status", "AUTHORIZED")
+                auth = c.get("auth_method", "PASSKEY_FIDO2_BIOMETRIC")
+            else:
+                cid = getattr(c, "consent_id", "n/a")
+                status = getattr(c, "status", "AUTHORIZED")
+                auth = getattr(c, "auth_method", "PASSKEY_FIDO2_BIOMETRIC")
+            print(f"  - Desafio ID: {cid} | Status: {status} ({auth}) | TTL: 120s")
 
     if audit.rejected_orders:
         print(f"\n🛑 ORDENS REJEITADAS ({len(audit.rejected_orders)}):")
@@ -229,15 +264,14 @@ def run_pipeline():
     print("🚀 INICIANDO CLOUD RUN JOB - GUARDRAIL-AI (GOVERNANÇA MULTI-CARTEIRA)")
     print("=" * 75)
 
-    # 1. Carrega configuração de clientes (Lote ou Individual)
     clients = load_job_configuration()
     print(f"📋 Total de Clientes / Carteiras para Processamento: {len(clients)}")
 
-    # 2. Identifica todos os tickers únicos para consulta consolidada
-    all_tickers = sorted(list(set(ticker for c in clients for ticker in c.get("watchlist", []))))
+    all_tickers = sorted(list(set(
+        ticker for c in clients for ticker in c.get("watchlist", ["PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBDC4.SA"])
+    )))
     print(f"🌐 Universo de Ativos B3 Monitorados: {', '.join(all_tickers)}")
 
-    # 3. Coleta de Mercado Otimizada (1 única vez para todo o lote)
     print("\n📊 PILAR 1 - Coleta Consolidada de Indicadores Técnicos e Notícias...")
     market_data = collect_market_data(all_tickers)
 
@@ -245,7 +279,6 @@ def run_pipeline():
         print("❌ Erro fatal: Falha ao obter dados de mercado para os ativos monitorados.")
         return
 
-    # 4. Processa cada carteira de investidor
     for client_cfg in clients:
         process_client_portfolio(client_cfg, market_data)
 
