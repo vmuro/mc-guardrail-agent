@@ -192,13 +192,12 @@ def create_fido_consent_challenge(client: Dict[str, Any], order: Dict[str, Any])
     challenge = create_consent_challenge(order_data, user_id=client_id)
 
     challenge_data = {
-        "challenge_id": challenge.consent_id,
-        "client_id": client_id,
-        "user_handle": client.get("fido_user_handle", client_id),
-        "order_hash": challenge.payload_hash,
-        "canonical_payload": generate_canonical_payload(order, challenge.nonce, challenge.created_at),
-        "ttl_seconds": CONSENT_TTL_SECONDS,
-        "created_at": challenge.created_at,
+        "challengeId": challenge.consent_id,
+        "clientId": client_id,
+        "userHandle": client.get("fido_user_handle", client_id),
+        "orderHash": challenge.payload_hash,
+        "canonicalPayload": generate_canonical_payload(order, challenge.nonce, challenge.created_at),
+        "ttlSeconds": CONSENT_TTL_SECONDS,
         "status": "PENDING"
     }
 

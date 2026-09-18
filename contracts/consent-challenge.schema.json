@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ConsentChallenge",
+  "description": "Contrato de dados formal para o Desafio de Consentimento CVM e Não-Repúdio compartilhado entre o Python Agent e o Java FIDO Server.",
+  "type": "object",
+  "required": [
+    "challengeId",
+    "clientId",
+    "orderHash",
+    "canonicalPayload",
+    "ttlSeconds"
+  ],
+  "properties": {
+    "challengeId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Identificador único universal (UUID) da solicitação de consentimento."
+    },
+    "clientId": {
+      "type": "string",
+      "description": "Identificador único do investidor (ex: CLI-001)."
+    },
+    "userHandle": {
+      "type": "string",
+      "description": "Identificador FIDO2/WebAuthn do usuário para credenciais biométricas."
+    },
+    "orderHash": {
+      "type": "string",
+      "description": "Assinatura HMAC-SHA256 ou digest SHA256 do payload canônico da ordem financeira."
+    },
+    "canonicalPayload": {
+      "type": "string",
+      "description": "String JSON ordenada e canônica contendo os dados da ordem para garantia anti-tampering."
+    },
+    "ttlSeconds": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 600,
+      "default": 120,
+      "description": "Tempo de vida estrito do desafio em segundos (padrão: 120s)."
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp ISO 8601 da criação do desafio."
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp ISO 8601 de expiração do desafio (createdAt + ttlSeconds)."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["PENDING", "APPROVED", "REJECTED", "EXPIRED"],
+      "default": "PENDING",
+      "description": "Status regulatório atual do desafio."
+    },
+    "signatureId": {
+      "type": "string",
+      "description": "Identificador da assinatura biométrica emitida pelo autenticador FIDO2."
+    },
+    "clientDataJson": {
+      "type": "string",
+      "description": "Payload clientDataJSON retornado pela API WebAuthn do navegador."
+    }
+  }
+}

@@ -52,15 +52,19 @@ gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 # 4. Build e Push da Imagem
 echo -e "\n🔨 ${BLUE}[3/5] Construindo e enviando a imagem do container...${NC}"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+AGENT_DIR="${ROOT_DIR}/agent-python"
+
 if [ "$BUILD_METHOD" == "docker" ]; then
-    echo -e "   -> Executando 'docker build' local..."
-    docker build -t "${IMAGE_URI}" .
+    echo -e "   -> Executando 'docker build' local a partir de agent-python..."
+    docker build -t "${IMAGE_URI}" "${AGENT_DIR}"
     
     echo -e "   -> Executando 'docker push' para ${IMAGE_URI}..."
     docker push "${IMAGE_URI}"
 else
     echo -e "   -> Submetendo build ao Google Cloud Build..."
-    gcloud builds submit --tag "${IMAGE_URI}" . --quiet
+    gcloud builds submit --tag "${IMAGE_URI}" "${AGENT_DIR}" --quiet
 fi
 
 # 5. Deploy do Cloud Run Job

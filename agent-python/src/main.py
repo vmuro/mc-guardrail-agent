@@ -13,7 +13,11 @@ from src.tools.screener import get_technical_indicators
 from src.tools.news_parser import get_stock_news
 from src.core.agent import analyze_market_with_gemini
 from src.core.guardrail import validate_portfolio_proposal
-from src.core.consent import create_consent_challenge, authorize_biometric_passkey
+from src.core.consent import (
+    create_consent_challenge,
+    authorize_biometric_passkey,
+    create_fido_consent_challenge
+)
 from src.core.logger import log_event
 
 
@@ -69,12 +73,16 @@ def load_job_configuration() -> List[Dict[str, Any]]:
     cli_single_specified = any(arg in sys.argv for arg in ["--client-id", "-c", "--budget", "-b", "--risk-profile", "-r", "--watchlist", "-w"])
 
     if config_specified_in_cli or (args.config and not cli_single_specified):
-        config_path = args.config if os.path.isabs(args.config) else os.path.join(REPO_ROOT, args.config)
-        if os.path.exists(config_path):
-            with open(config_path, "r", encoding="utf-8") as f:
-                clients_data = json.load(f)
-                if isinstance(clients_data, list) and len(clients_data) > 0:
-                    return clients_data
+        candidate_paths = [
+            args.config if os.path.isabs(args.config) else os.path.join(REPO_ROOT, args.config),
+            os.path.join(REPO_ROOT, "..", args.config)
+        ]
+        for config_path in candidate_paths:
+            if os.path.exists(config_path):
+                with open(config_path, "r", encoding="utf-8") as f:
+                    clients_data = json.load(f)
+                    if isinstance(clients_data, list) and len(clients_data) > 0:
+                        return clients_data
 
     # Se parâmetros de cliente individual foram passados na CLI
     if cli_single_specified:
@@ -89,9 +97,14 @@ def load_job_configuration() -> List[Dict[str, Any]]:
             }
         ]
 
-    # Fallback: Tenta carregar config/clients.json ou clients.json se existirem
-    for default_json in ["config/clients.json", "clients.json"]:
-        json_path = os.path.join(REPO_ROOT, default_json)
+    # Fallback: Tenta carregar config/clients.json ou clients.json na raiz ou em agent-python
+    search_paths = [
+        os.path.join(REPO_ROOT, "config", "clients.json"),
+        os.path.join(REPO_ROOT, "..", "config", "clients.json"),
+        os.path.join(REPO_ROOT, "clients.json"),
+        os.path.join(REPO_ROOT, "..", "clients.json")
+    ]
+    for json_path in search_paths:
         if os.path.exists(json_path):
             with open(json_path, "r", encoding="utf-8") as f:
                 clients_data = json.load(f)
@@ -179,20 +192,27 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
     for audit_item in audit.approved_orders:
         order = audit_item.order
         if order.action in ["BUY", "SELL"] and order.quantity > 0:
+            order_payload = {
+                "ticker": order.ticker,
+                "action": order.action,
+                "quantity": order.quantity,
+                "unit_price": order.unit_price,
+                "total_cost": order.total_cost,
+                "stop_loss_price": order.stop_loss_price,
+                "whatsapp_phone": client_config.get("whatsapp_phone"),
+                "client_name": client_config.get("name", client_id)
+            }
+            # Registra no servidor FIDO Spring Boot (REST) e gera o desafio
+            fido_res = create_fido_consent_challenge(client_config, order_payload)
+            challenge_id = fido_res.get("challenge_id", fido_res.get("challengeId"))
+
             challenge = create_consent_challenge(
-                order_data={
-                    "ticker": order.ticker,
-                    "action": order.action,
-                    "quantity": order.quantity,
-                    "unit_price": order.unit_price,
-                    "total_cost": order.total_cost,
-                    "stop_loss_price": order.stop_loss_price,
-                    "whatsapp_phone": client_config.get("whatsapp_phone"),
-                    "client_name": client_config.get("name", client_id)
-                },
+                order_data=order_payload,
                 user_id=client_id,
                 ttl_seconds=120
             )
+            # Vincula o ID gerado para correlação
+            challenge.consent_id = challenge_id
 
             authorized = authorize_biometric_passkey(
                 challenge,
@@ -251,6 +271,7 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
                 status = getattr(c, "status", "AUTHORIZED")
                 auth = getattr(c, "auth_method", "PASSKEY_FIDO2_BIOMETRIC")
             print(f"  - Desafio ID: {cid} | Status: {status} ({auth}) | TTL: 120s")
+            print(f"    🔗 URL WebAuthn: http://localhost:8080/consent.html?challengeId={cid}")
 
     if audit.rejected_orders:
         print(f"\n🛑 ORDENS REJEITADAS ({len(audit.rejected_orders)}):")

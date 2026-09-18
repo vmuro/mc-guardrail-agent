@@ -77,73 +77,134 @@ flowchart LR
 
 ---
 
-## 🏗️ Estrutura do Projeto
+## 🏗️ Estrutura Modular do Projeto
+
+O repositório é organizado em módulos desacoplados com ciclos de vida, testes e ambientes independentes, mantendo recursos e contratos compartilhados centralizados:
 
 ```
 .
-├── src/
-│   ├── core/
-│   │   ├── agent.py       # Integração cognitiva com Gemini 2.5 Flash (Vertex AI)
-│   │   ├── consent.py     # Pilar 3: Consentimento Regulatório, Payload Binding & TTL 120s
-│   │   ├── guardrail.py   # Pilar 1 e 2: Motor Determinístico de Risco e Q = floor(B/P)
-│   │   └── logger.py      # Emissão de logs estruturados (Cloud Logging)
-│   ├── tools/
-│   │   ├── screener.py    # Coleta de mercado (MACD, Bollinger, EMAs, RSI via yfinance)
-│   │   └── news_parser.py # Coleta e parsing de notícias via Google News RSS
-│   └── main.py            # Orquestrador do pipeline de ponta a ponta
-├── tests/
-│   ├── test_guardrail.py  # Testes de regras de risco e blindagem matemática
-│   ├── test_consent.py    # Testes de Payload Binding HMAC, Passkey e TTL de 120s
-│   └── test_screener.py   # Testes dos indicadores técnicos avançados
-├── pytest.ini             # Configuração da suíte de testes
-├── Dockerfile             # Container para Cloud Run Job
-└── requirements.txt       # Dependências Python do projeto
+├── agent-python/                      # [MÓDULO] Agente de IA, Guardrails e Screener B3
+│   ├── src/
+│   │   ├── core/
+│   │   │   ├── agent.py               # Integração cognitiva com Gemini 2.5 Flash (Vertex AI)
+│   │   │   ├── guardrail.py           # Guardrail Determinístico Q = floor(B/P)
+│   │   │   ├── consent.py             # Cliente de Consentimento REST & Payload Binding
+│   │   │   ├── notifier.py            # Notificações WhatsApp / Webhooks
+│   │   │   └── logger.py              # Cloud Logging estruturado
+│   │   ├── tools/
+│   │   │   ├── screener.py            # Coleta de Indicadores B3 (MACD, Bollinger, EMAs, RSI)
+│   │   │   └── news_parser.py         # Parsing de notícias financeiras Google News RSS
+│   │   └── main.py                    # Orquestrador do pipeline de governança
+│   ├── tests/                         # Suíte de testes Pytest do agente
+│   │   ├── test_guardrail.py          # Validação de regras e blindagem matemática
+│   │   ├── test_consent.py            # Validação de HMAC, Passkey e TTL de 120s
+│   │   ├── test_screener.py           # Validação dos indicadores técnicos
+│   │   └── test_config.py             # Validação de argumentos e carregamento de lote
+│   ├── Dockerfile                     # Container leve do Python Agent (Cloud Run Job)
+│   ├── pytest.ini                     # Configuração Pytest
+│   ├── requirements.txt               # Dependências Python isoladas
+│   └── README.md                      # Instruções específicas do Agente Python
+│
+├── fido-server/                       # [MÓDULO] Servidor WebAuthn / Passkey (Java 21 / Spring Boot)
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/com/guardrail/fido/
+│   │   │   │   ├── controller/        # ConsentApiController.java
+│   │   │   │   ├── model/             # ConsentChallenge.java
+│   │   │   │   ├── service/           # ConsentService.java
+│   │   │   │   └── FidoServerApplication.java
+│   │   │   └── resources/
+│   │   │       ├── application.yml    # Configurações do Spring Boot
+│   │   │       └── static/consent.html # WebUI Biométrica WebAuthn / Passkey
+│   │   └── test/                      # Testes unitários do servidor FIDO
+│   ├── Dockerfile                     # Container multi-stage Java 21
+│   ├── pom.xml                        # Configuração de dependências Maven
+│   ├── mvnw / mvnw.cmd                # Maven Wrapper
+│   └── README.md                      # Instruções específicas do Servidor FIDO
+│
+├── contracts/                         # [COMPARTILHADO] Schemas e Contratos REST Inter-Módulos
+│   ├── consent-challenge.schema.json  # Schema formal JSON do Desafio de Consentimento
+│   └── README.md                      # Especificação técnica do contrato de dados
+│
+├── config/                            # [COMPARTILHADO] Configurações de Carteiras e Clientes
+│   └── clients.json                   # Watchlists, perfis de risco e orçamentos
+│
+├── docs/                              # [COMPARTILHADO] Documentação de Arquitetura
+│   ├── arquitetura-referencia.png     # Diagrama visual dos 3 Pilares
+│   └── ARCHITECTURE.md                # Especificação arquitetural completa
+│
+├── scripts/                           # [COMPARTILHADO] Automação, Deploy e Execução Local
+│   ├── deploy_cloud_run.sh            # Script oficial de deploy no GCP Cloud Run Jobs
+│   ├── run_local.sh                   # Inicializador conjunto local (Linux/WSL)
+│   └── run_local.ps1                  # Inicializador conjunto local (Windows PowerShell)
+│
+├── docker-compose.yml                 # Orquestração local unificada (FIDO + Agent)
+├── .env.example                       # Variáveis de ambiente recomendadas
+└── README.md                          # Visão geral do ecossistema GuardrailAI
 ```
 
 ---
 
 ## ⚙️ Pré-requisitos
 
-* Python 3.12+ (ou 3.14 via WSL)
-* Google Cloud SDK (`gcloud`) autenticado
-* Projeto GCP com Vertex AI, Cloud Run e Cloud Logging habilitados
+* **Python:** 3.12+ (ou 3.14 via WSL/Linux)
+* **Java:** OpenJDK 21 (para compilar/executar o `fido-server`)
+* **Google Cloud SDK (`gcloud`)** autenticado (para deploy em nuvem)
+* **Docker & Docker Compose** (opcional para execução conteinerizada)
 
 ---
 
-## 🚀 Como Executar Localmente
+## 🚀 Como Executar
 
-1. **Ative o ambiente virtual:**
-   ```bash
-   source .venv/bin/activate
-   ```
+### Opção 1: Execução Completa Integrada com 1 Comando (Recomendado)
 
-2. **Execute a suíte completa de testes automatizados:**
-   ```bash
-   pytest -v
-   ```
+- **No Linux / WSL / macOS:**
+  ```bash
+  ./scripts/run_local.sh
+  ```
 
-3. **Execute o pipeline principal de governança:**
+- **No Windows (PowerShell):**
+  ```powershell
+  .\scripts\run_local.ps1
+  ```
 
-   - **Modo Padrão (Cliente Único):**
-     ```bash
-     python src/main.py
-     ```
+- **Via Docker Compose:**
+  ```bash
+  docker compose up --build
+  ```
 
-   - **Modo Dinâmico via CLI:**
-     ```bash
-     python src/main.py --client-id "investidor_vip_007" --budget 12000 --risk "AGGRESSIVE" --watchlist "PETR4.SA,VALE3.SA,ITUB4.SA"
-     ```
+---
 
-   - **Modo Lote Multi-Carteiras (AAI / Gestoras de Wealth Management):**
-     ```bash
-     python src/main.py --config config/clients.json
-     ```
+### Opção 2: Execução Independente por Módulo
+
+#### 🐍 Módulo Python (`agent-python`)
+```bash
+cd agent-python
+source .venv/bin/activate  # ou .venv\Scripts\activate no Windows
+
+# Rodar testes automatizados:
+pytest -v
+
+# Executar pipeline de governança:
+python src/main.py --config ../config/clients.json
+```
+
+#### ☕ Módulo Java (`fido-server`)
+```bash
+cd fido-server
+
+# Rodar testes:
+./mvnw test
+
+# Iniciar servidor Spring Boot (porta 8080):
+./mvnw spring-boot:run
+```
 
 ---
 
 ## ☁️ Deploy no Google Cloud (Cloud Run Jobs)
 
-### 🚀 Deploy Automatizado com 1 Comando (Recomendado)
+### 🚀 Deploy Automatizado do Agente com 1 Comando
 
 ```bash
 ./scripts/deploy_cloud_run.sh
@@ -151,19 +212,19 @@ flowchart LR
 
 ---
 
-### 🛠️ Deploy Manual Passo a Passo (Docker Local)
+### 🛠️ Deploy Manual do Container Python
 
 ```bash
 # 1. Autenticar o Docker com o Artifact Registry do Google Cloud
 gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
-# 2. Construir a imagem localmente
-docker build -t us-central1-docker.pkg.dev/gft-brazil-bu-gcp/repo-guardrailai/guardrail-agent:latest .
+# 2. Construir a imagem a partir de agent-python
+docker build -t us-central1-docker.pkg.dev/gft-brazil-bu-gcp/repo-guardrailai/guardrail-agent:latest ./agent-python
 
-# 3. Enviar a imagem para o repositório da equipe
+# 3. Enviar a imagem para o Artifact Registry
 docker push us-central1-docker.pkg.dev/gft-brazil-bu-gcp/repo-guardrailai/guardrail-agent:latest
 
-# 4. Criar ou atualizar o Cloud Run Job apontando para a imagem
+# 4. Criar ou atualizar o Cloud Run Job
 gcloud run jobs deploy guardrail-agent-job \
   --image us-central1-docker.pkg.dev/gft-brazil-bu-gcp/repo-guardrailai/guardrail-agent:latest \
   --region us-central1 \
@@ -172,9 +233,9 @@ gcloud run jobs deploy guardrail-agent-job \
   --cpu=1
 ```
 
-### 🧪 Como Executar na Nuvem
+### 🧪 Execução na Nuvem
 
-- **Execução Manual:**
-  ```bash
-  gcloud run jobs execute guardrail-agent-job --region us-central1
-  ```
+```bash
+gcloud run jobs execute guardrail-agent-job --region us-central1
+```
+

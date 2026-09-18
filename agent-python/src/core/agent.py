@@ -1,10 +1,16 @@
+import os
 import json
 from google import genai
 from google.genai import types
 
-PROJECT_ID = "gft-brazil-bu-gcp"
-LOCATION = "us-central1"
-MODEL_NAME = "gemini-2.5-flash"
+PROJECT_ID = os.getenv("PROJECT_ID", "gft-brazil-bu-gcp")
+LOCATION = os.getenv("LOCATION", "us-central1")
+MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash")
+
+if "GOOGLE_CLOUD_PROJECT" not in os.environ:
+    os.environ["GOOGLE_CLOUD_PROJECT"] = PROJECT_ID
+if "GOOGLE_CLOUD_LOCATION" not in os.environ:
+    os.environ["GOOGLE_CLOUD_LOCATION"] = LOCATION
 
 SYSTEM_INSTRUCTION = """
 Você é o módulo de análise cognitiva do GuardrailAI, um middleware B2B de governança de investimentos focado no mercado de capitais brasileiro (B3).
