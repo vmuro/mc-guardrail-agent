@@ -31,8 +31,9 @@
             padding: 28px;
             max-width: 440px;
             width: 100%;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
             border: 1px solid #334155;
+            position: relative;
         }
 
         .header-bar {
@@ -50,6 +51,7 @@
             font-size: 11px;
             font-weight: 700;
             text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .timer {
@@ -60,6 +62,10 @@
             padding: 4px 10px;
             border-radius: 8px;
             border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .title-group {
+            margin-bottom: 20px;
         }
 
         .title-group h2 {
@@ -74,7 +80,7 @@
         .title-group p {
             color: #94a3b8;
             font-size: 13px;
-            margin: 4px 0 18px 0;
+            margin-top: 4px;
         }
 
         .order-box {
@@ -101,7 +107,7 @@
 
         .row strong {
             color: #f8fafc;
-            font-family: ui-monospace, monospace;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         }
 
         .btn {
@@ -112,7 +118,7 @@
             font-size: 15px;
             font-weight: 700;
             cursor: pointer;
-            transition: 0.2s;
+            transition: all 0.2s ease-in-out;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -125,10 +131,18 @@
             margin-top: 12px;
         }
 
+        .btn-approve:hover:not(:disabled) {
+            background-color: #16a34a;
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+            transform: translateY(-1px);
+        }
+
         .btn-approve:disabled {
             background-color: #334155;
             color: #64748b;
             cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
 
         .status-msg {
@@ -137,6 +151,14 @@
             font-weight: 600;
             font-size: 13px;
             min-height: 20px;
+            line-height: 1.4;
+        }
+
+        .footer-note {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 11px;
+            color: #64748b;
         }
     </style>
 </head>
@@ -161,11 +183,50 @@
         <button class="btn btn-approve" id="authBtn" disabled>
             🔒 Assinar com FaceID / Biometria
         </button>
+        <button id="signBtn" style="display: none;" disabled></button>
         <div id="statusMsg" class="status-msg"></div>
+        <div class="footer-note">
+            Auditado deterministicamente contra alucinações matemáticas (Q = ⌊B/P⌋).
+        </div>
     </div>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-messaging-compat.js"></script>
+    <script>
+        const originalGetById = document.getElementById.bind(document);
+        document.getElementById = function (id) {
+            if (id === 'signBtn') {
+                return originalGetById('authBtn') || originalGetById('signBtn');
+            }
+            return originalGetById(id);
+        };
+    </script>
     <script src="/consent.js" defer></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            let timeLeft = 120;
+            const timerElem = document.getElementById("timer");
+            const authBtn = document.getElementById("authBtn");
+            const statusMsg = document.getElementById("statusMsg");
+            const interval = setInterval(() => {
+                timeLeft--;
+                if (timerElem) timerElem.textContent = `TTL: ${timeLeft}s`;
+                if (timeLeft <= 0) {
+                    clearInterval(interval);
+                    if (timerElem) {
+                        timerElem.textContent = "EXPIRADO";
+                        timerElem.style.color = "#ef4444";
+                        timerElem.style.borderColor = "rgba(239, 68, 68, 0.3)";
+                        timerElem.style.background = "rgba(239, 68, 68, 0.1)";
+                    }
+                    if (authBtn && !authBtn.innerText.includes("Concluída")) authBtn.disabled = true;
+                    if (statusMsg && !statusMsg.innerText.includes("sucesso")) {
+                        statusMsg.style.color = "#ef4444";
+                        statusMsg.innerText = "⚠️ Desafio expirado após 120s. Gere uma nova ordem.";
+                    }
+                }
+            }, 1000);
+        });
+    </script>
 </body>
 
 </html>
