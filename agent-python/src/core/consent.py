@@ -1,5 +1,5 @@
 """
-Módulo de Consentimento Regulatório, Não-Repúdio (CVM), FIDO/WebAuthn e Notificação WhatsApp.
+Módulo de Consentimento Regulatório, Não-Repúdio (CVM), FIDO/WebAuthn e Notificação Push (FCM).
 """
 import os
 import time
@@ -12,21 +12,16 @@ import requests
 from typing import Literal, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
-from .notifier import send_whatsapp_notification
+from .notifier import send_push_notification
 
 logger = logging.getLogger("GuardrailAI.Consent")
 
-# URL base do servidor Spring Boot WebAuthn
-SPRING_FIDO_BASE_URL = os.getenv("SPRING_FIDO_BASE_URL", "http://localhost:8080")
-CONSENT_WEB_BASE_URL = os.getenv("CONSENT_WEB_BASE_URL", "https://seu-dominio-ngrok.ngrok-free.app")
-CONSENT_TTL_SECONDS = 120  # Janela estrita de 120 segundos para autorização biométrica
+SPRING_FIDO_BASE_URL = os.getenv("SPRING_FIDO_BASE_URL", "http://localhost:8080").rstrip("/")
+CONSENT_WEB_BASE_URL = os.getenv("CONSENT_WEB_BASE_URL", SPRING_FIDO_BASE_URL).rstrip("/")
+CONSENT_TTL_SECONDS = 120
 
 
 class ConsentChallenge(BaseModel):
-    """
-    Desafio de consentimento regulatório gerado para uma ordem financeira.
-    Possui vinculação criptográfica inviolável (Payload Binding) e validade temporal estrita.
-    """
     consent_id: str = Field(..., description="UUID único da solicitação de consentimento")
     user_id: str = Field(default="client_retail_001", description="Identificador do investidor")
     ticker: str = Field(..., description="Código do ativo na B3")
@@ -54,20 +49,15 @@ class ConsentChallenge(BaseModel):
 
     @property
     def remaining_seconds(self) -> float:
-        """Retorna o tempo restante de validade em segundos."""
         rem = self.expires_at - time.time()
         return max(0.0, round(rem, 1))
 
     @property
     def is_expired(self) -> bool:
-        """Verifica se a janela de 120 segundos foi ultrapassada."""
         return time.time() > self.expires_at
 
 
 def generate_canonical_payload(order_dict: Dict[str, Any], nonce: str, created_at: float) -> str:
-    """
-    Gera a representação canônica ordenada dos dados da ordem para garantir não-adulteração.
-    """
     canonical_data = {
         "action": order_dict.get("action"),
         "created_at": created_at,
@@ -87,10 +77,6 @@ def create_consent_challenge(
     secret_key: str = "guardrail_hmac_secret_key_cvm_2026",
     ttl_seconds: int = CONSENT_TTL_SECONDS
 ) -> ConsentChallenge:
-    """
-    Cria um desafio de consentimento regulatório com Payload Binding criptográfico (HMAC-SHA256)
-    e janela temporal estrita de 120 segundos para autorização biométrica (Passkey / FIDO2).
-    """
     now = time.time()
     nonce = uuid.uuid4().hex
     consent_id = str(uuid.uuid4())
@@ -106,7 +92,7 @@ def create_consent_challenge(
         hashlib.sha256
     ).hexdigest()
 
-    challenge = ConsentChallenge(
+    return ConsentChallenge(
         consent_id=consent_id,
         user_id=user_id,
         ticker=order_data.get("ticker", "DESCONHECIDO"),
@@ -122,35 +108,18 @@ def create_consent_challenge(
         status="PENDING"
     )
 
-    # Dispara notificação via WhatsApp se houver telefone informado
-    phone = order_data.get("whatsapp_phone") or order_data.get("phone")
-    if phone:
-        consent_url = f"{CONSENT_WEB_BASE_URL}/consent.html?challengeId={consent_id}"
-        send_whatsapp_notification(
-            phone=phone,
-            client_name=order_data.get("client_name", user_id),
-            order=order_data,
-            consent_url=consent_url
-        )
-
-    return challenge
-
 
 def verify_payload_integrity(
     challenge: ConsentChallenge,
     current_order_data: Dict[str, Any],
     secret_key: str = "guardrail_hmac_secret_key_cvm_2026"
 ) -> bool:
-    """
-    Verifica se os dados da ordem não foram adulterados (anti-tampering).
-    """
     canonical_payload = generate_canonical_payload(current_order_data, challenge.nonce, challenge.created_at)
     expected_hash = hmac.new(
         secret_key.encode("utf-8"),
         canonical_payload.encode("utf-8"),
         hashlib.sha256
     ).hexdigest()
-
     return hmac.compare_digest(challenge.payload_hash, expected_hash)
 
 
@@ -159,12 +128,7 @@ def authorize_biometric_passkey(
     auth_method: str = "PASSKEY_FIDO2_BIOMETRIC",
     current_time: Optional[float] = None
 ) -> ConsentChallenge:
-    """
-    Processa a autorização biométrica via Passkey/FIDO2.
-    Valida estritamente se o tempo decorrido está dentro do TTL de 120 segundos.
-    """
     check_time = current_time if current_time is not None else time.time()
-
     if check_time > challenge.expires_at:
         challenge.status = "EXPIRED"
         challenge.auth_method = None
@@ -177,17 +141,17 @@ def authorize_biometric_passkey(
     return challenge
 
 
-# Integracão FIDO WebAuthn com Spring Boot
 def create_fido_consent_challenge(client: Dict[str, Any], order: Dict[str, Any]) -> Dict[str, Any]:
     """
-    1. Gera o desafio de consentimento.
-    2. Registra o desafio no Spring Security FIDO Server se disponível.
-    3. Dispara a notificação via WhatsApp para o investidor.
+    Exporta explicitamente a função esperada pelo main.py:
+    1. Cria o desafio local.
+    2. Registra no Spring Boot FIDO server se ativo.
+    3. Retorna o payload estruturado com challengeId.
     """
     client_id = client.get("client_id", "client_retail_001")
+    client_name = client.get("name", client_id)
     order_data = dict(order)
-    order_data["whatsapp_phone"] = client.get("whatsapp_phone")
-    order_data["client_name"] = client.get("name", client_id)
+    order_data["client_name"] = client_name
 
     challenge = create_consent_challenge(order_data, user_id=client_id)
 
@@ -216,28 +180,17 @@ def create_fido_consent_challenge(client: Dict[str, Any], order: Dict[str, Any])
 
 
 def poll_for_fido_approval(challenge_id: str, timeout: int = CONSENT_TTL_SECONDS, interval: int = 2) -> Dict[str, Any]:
-    """
-    Aguarda a assinatura biométrica do cliente através de polling no servidor Spring.
-    """
     start_time = time.time()
-    logger.info(f"[CONSENT] Aguardando aprovação biométrica para Challenge: {challenge_id} (TTL: {timeout}s)...")
-
     while time.time() - start_time < timeout:
         try:
             resp = requests.get(f"{SPRING_FIDO_BASE_URL}/api/consent/status/{challenge_id}", timeout=2)
             if resp.status_code == 200:
                 data = resp.json()
-                status = data.get("status")
-                if status == "APPROVED":
-                    logger.info(f"✅ [CONSENT] Ordem aprovada biometricamente via FIDO! Assinatura: {data.get('signature_id')}")
+                if data.get("status") == "APPROVED":
                     return {"approved": True, "details": data}
-                elif status == "REJECTED":
-                    logger.warning(f"❌ [CONSENT] Ordem rejeitada pelo usuário.")
+                elif data.get("status") == "REJECTED":
                     return {"approved": False, "reason": "USER_REJECTED"}
         except Exception:
             pass
-
         time.sleep(interval)
-
-    logger.warning(f"⏱️ [CONSENT] Desafio {challenge_id} expirou (TTL ultrapassado).")
     return {"approved": False, "reason": "TTL_EXPIRED"}

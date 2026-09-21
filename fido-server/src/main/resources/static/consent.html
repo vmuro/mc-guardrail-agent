@@ -1,156 +1,171 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GuardrailAI - Autorização Biométrica</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <style>
-        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body { background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 16px; }
-        .card { background: #1e293b; border-radius: 16px; padding: 24px; max-width: 420px; width: 100%; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }
-        .badge { background: #0284c7; color: white; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
-        .timer { color: #f59e0b; font-size: 14px; font-weight: bold; margin-top: 8px; }
-        .order-box { background: #0f172a; border-radius: 10px; padding: 16px; margin: 16px 0; border-left: 4px solid #38bdf8; }
-        .row { display: flex; justify-content: space-between; margin: 6px 0; font-size: 14px; }
-        .btn { width: 100%; padding: 14px; border-radius: 10px; border: none; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .btn-approve { background: #22c55e; color: #000; margin-top: 12px; }
-        .btn-approve:hover { background: #16a34a; }
-        .status-msg { text-align: center; margin-top: 16px; font-weight: bold; font-size: 14px; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .card {
+            background-color: #1e293b;
+            border-radius: 16px;
+            padding: 28px;
+            max-width: 440px;
+            width: 100%;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+            border: 1px solid #334155;
+        }
+
+        .header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .badge {
+            background-color: #0284c7;
+            color: #ffffff;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .timer {
+            color: #f59e0b;
+            font-size: 13px;
+            font-weight: 600;
+            background: rgba(245, 158, 11, 0.1);
+            padding: 4px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .title-group h2 {
+            font-size: 22px;
+            font-weight: 700;
+            color: #f8fafc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .title-group p {
+            color: #94a3b8;
+            font-size: 13px;
+            margin: 4px 0 18px 0;
+        }
+
+        .order-box {
+            background: #0f172a;
+            border-radius: 12px;
+            padding: 18px;
+            margin: 18px 0;
+            border: 1px solid #334155;
+            border-left: 4px solid #38bdf8;
+            min-height: 80px;
+            font-size: 14px;
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            font-size: 13px;
+        }
+
+        .row span {
+            color: #94a3b8;
+        }
+
+        .row strong {
+            color: #f8fafc;
+            font-family: ui-monospace, monospace;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: 10px;
+            border: none;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-approve {
+            background-color: #22c55e;
+            color: #052e16;
+            margin-top: 12px;
+        }
+
+        .btn-approve:disabled {
+            background-color: #334155;
+            color: #64748b;
+            cursor: not-allowed;
+        }
+
+        .status-msg {
+            text-align: center;
+            margin-top: 16px;
+            font-weight: 600;
+            font-size: 13px;
+            min-height: 20px;
+        }
     </style>
 </head>
+
 <body>
-<div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span class="badge">CVM Compliance</span>
-        <div id="timer" class="timer">TTL: 120s</div>
-    </div>
-
-    <h2 style="margin: 12px 0 4px 0;">🛡️ GuardrailAI</h2>
-    <p style="color: #94a3b8; font-size: 14px; margin: 0 0 16px 0;">Autorização de Ordem com Não-Repúdio (FIDO2)</p>
-
-    <div class="order-box" id="orderSummary">
-        Carregando parâmetros da ordem...
-    </div>
-
-    <button class="btn btn-approve" id="authBtn" onclick="authorizeWithWebAuthn()">
-        🔒 Assinar com FaceID / Biometria
-    </button>
-
-    <div id="statusMsg" class="status-msg"></div>
-</div>
-
-<script>
-    const urlParams = new URLSearchParams(window.location.search);
-    const challengeId = urlParams.get('challengeId') || urlParams.get('challenge_id') || urlParams.get('id');
-    let remainingSeconds = 120;
-
-    async function loadChallenge() {
-        if (!challengeId) {
-            document.getElementById('orderSummary').innerHTML = "❌ Challenge ID não fornecido na URL.<br><small style='color:#94a3b8'>Exemplo: ?challengeId=&lt;UUID&gt;</small>";
-            document.getElementById('authBtn').disabled = true;
-            return;
-        }
-
-        try {
-            const res = await fetch(`/api/consent/status/${challengeId}`);
-            if (!res.ok) throw new Error("Desafio não encontrado no servidor FIDO.");
-            const data = await res.json();
-
-            if (data.status === 'EXPIRED') {
-                document.getElementById('orderSummary').innerHTML = "⏱️ Este desafio de consentimento já expirou.";
-                document.getElementById('authBtn').disabled = true;
-                document.getElementById('timer').innerText = "EXPIRADO";
-                return;
-            }
-
-            const payload = typeof data.canonicalPayload === 'string' ? JSON.parse(data.canonicalPayload) : (data.canonicalPayload || {});
-            document.getElementById('orderSummary').innerHTML = `
-                <div class="row"><span>Cliente:</span><b>${data.clientId || 'N/A'}</b></div>
-                <div class="row"><span>Ativo:</span><b>${payload.ticker || 'N/A'}</b></div>
-                <div class="row"><span>Ação:</span><b>${payload.action || 'N/A'} (${payload.quantity || 0} cotas)</b></div>
-                <div class="row"><span>Preço Unitário:</span><b>R$ ${Number(payload.unit_price || payload.estimated_price || 0).toFixed(2)}</b></div>
-                <div class="row"><span>Stop Loss:</span><b>R$ ${Number(payload.stop_loss_price || 0).toFixed(2)}</b></div>
-                <div class="row" style="font-size:11px; color:#64748b; margin-top:8px;">
-                    <span>Hash HMAC:</span><span style="font-family:monospace;">${(data.orderHash || '').substring(0, 16)}...</span>
+    <div class="card">
+        <div class="header-bar">
+            <span class="badge">CVM Compliance</span>
+            <div id="timer" class="timer">TTL: 120s</div>
+        </div>
+        <div class="title-group">
+            <h2>🛡️ GuardrailAI</h2>
+            <p>Autorização de Ordem com Não-Repúdio (FIDO2)</p>
+        </div>
+        <div class="order-box" id="orderSummary">
+            <div id="order-details">
+                <div id="orderParams">
+                    <span style="color: #94a3b8; font-style: italic;">Carregando parâmetros da ordem...</span>
                 </div>
-            `;
-
-            if (data.status === 'APPROVED') {
-                document.getElementById('statusMsg').innerHTML = "<span style='color:#22c55e;'>✅ Ordem já autorizada biometricamente!</span>";
-                document.getElementById('authBtn').style.display = 'none';
-                document.getElementById('timer').innerText = "AUTORIZADO";
-                return;
-            }
-
-            if (data.expiresAt) {
-                const exp = new Date(data.expiresAt).getTime();
-                remainingSeconds = Math.max(0, Math.floor((exp - Date.now()) / 1000));
-            }
-
-            startCountdown();
-        } catch (err) {
-            console.error("Erro ao carregar desafio:", err);
-            document.getElementById('orderSummary').innerHTML = `❌ Erro ao buscar desafio: ${err.message}`;
-            document.getElementById('authBtn').disabled = true;
-        }
-    }
-
-    function startCountdown() {
-        const timerEl = document.getElementById('timer');
-        const interval = setInterval(() => {
-            remainingSeconds--;
-            timerEl.innerText = `TTL: ${remainingSeconds}s`;
-            if (remainingSeconds <= 0) {
-                clearInterval(interval);
-                timerEl.innerText = "EXPIRADO";
-                document.getElementById('authBtn').disabled = true;
-                document.getElementById('statusMsg').innerHTML = "<span style='color:#ef4444;'>⏱️ Desafio expirado!</span>";
-            }
-        }, 1000);
-    }
-
-    async function authorizeWithWebAuthn() {
-        const statusEl = document.getElementById('statusMsg');
-        statusEl.innerHTML = "⏳ Solicitando biometria do dispositivo...";
-
-        try {
-            // Desafio FIDO (Passkey / WebAuthn)
-            const challengeBytes = new Uint8Array(32);
-            window.crypto.getRandomValues(challengeBytes);
-
-            // Aciona a autenticação nativa do aparelho (FaceID / TouchID / Windows Hello)
-            const credential = await navigator.credentials.get({
-                publicKey: {
-                    challenge: challengeBytes,
-                    timeout: 60000,
-                    userVerification: "required",
-                    rpId: window.location.hostname
-                }
-            }).catch(() => null);
-
-            // Envia validação ao Spring Boot
-            const response = await fetch('/api/consent/verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    challengeId: challengeId,
-                    signature: credential ? credential.id : ("bio_sig_" + Date.now()),
-                    clientDataJson: "verified_via_secure_enclave"
-                })
-            });
-
-            if (response.ok) {
-                statusEl.innerHTML = "<span style='color:#22c55e;'>✅ Ordem Autorizada com Sucesso!</span>";
-                document.getElementById('authBtn').style.display = 'none';
-            } else {
-                statusEl.innerHTML = "<span style='color:#ef4444;'>❌ Falha na autorização.</span>";
-            }
-        } catch (e) {
-            statusEl.innerHTML = "<span style='color:#ef4444;'>Erro: " + e.message + "</span>";
-        }
-    }
-
-    loadChallenge();
-</script>
+            </div>
+        </div>
+        <button class="btn btn-approve" id="authBtn" disabled>
+            🔒 Assinar com FaceID / Biometria
+        </button>
+        <div id="statusMsg" class="status-msg"></div>
+    </div>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-messaging-compat.js"></script>
+    <script src="/consent.js" defer></script>
 </body>
+
 </html>

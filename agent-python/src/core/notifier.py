@@ -1,70 +1,39 @@
-"""
-Módulo de Notificação - GuardrailAI
-Responsável pelo envio de links de consentimento biométrico via WhatsApp / Mensageria.
-"""
+# agent-python/src/core/notifier.py
 import os
-import json
-import logging
-import requests
+import firebase_admin
+from firebase_admin import credentials, messaging
 
-logger = logging.getLogger("GuardrailAI.Notifier")
+FCM_CREDS_PATH = "/home/ubuntu/repo/mc-guardrail-agent/agent-python/config/fcm-service-account.json"
+# Certifique-se que este é o token mais recente gerado no console do seu navegador
+TARGET_DEVICE_TOKEN = "eixTwBdIMVZtlQXEEn9g3D:APA91bFrT63niRg9pxqQOYJ5RyLC7JzVDK9a2WAocIjcRlknUZPWYMCt8prPmbrYo2wIJ-39FDoUnevcRIqrAhMX-pMPO_w-2nsCcR1YtqI0Y_7qTJeJocY"
 
-# Configurações de Gateway WhatsApp (ex: Twilio / Z-API / Evolution API)
-WHATSAPP_API_URL = os.getenv("WHATSAPP_API_URL", "")
-WHATSAPP_API_TOKEN = os.getenv("WHATSAPP_API_TOKEN", "")
+try:
+    if os.path.exists(FCM_CREDS_PATH) and not firebase_admin._apps:
+        cred = credentials.Certificate(FCM_CREDS_PATH)
+        firebase_admin.initialize_app(cred)
+        print(f"✅ [NOTIFIER] Firebase Admin SDK inicializado.")
+except Exception as e:
+    print(f"❌ [NOTIFIER] ERRO ao inicializar Firebase: {e}")
 
-
-def format_consent_message(client_name: str, order: dict, consent_url: str, ttl_seconds: int = 120) -> str:
-    """Monta a mensagem formatada para envio no WhatsApp."""
-    return (
-        f"🚨 *GuardrailAI - Autorização de Ordem*\n\n"
-        f"Olá, *{client_name}*!\n"
-        f"Uma nova recomendação de investimento foi aprovada pelos nossos guardrails de segurança:\n\n"
-        f"• *Ativo:* `{order.get('ticker')}`\n"
-        f"• *Ação:* *{order.get('action', 'BUY')}*\n"
-        f"• *Quantidade:* {order.get('quantity')} cotas\n"
-        f"• *Preço Estimado:* R$ {order.get('unit_price', order.get('estimated_price', 0.0)):.2f}\n"
-        f"• *Valor Total:* R$ {order.get('total_cost', order.get('total_amount', 0.0)):.2f}\n"
-        f"• *Stop Loss:* R$ {order.get('stop_loss_price', 0.0):.2f}\n"
-        f"• *Tempo Limite:* {ttl_seconds} segundos\n\n"
-        f"🔒 *Para autorizar via Biometria / Passkey, toque no link:*\n"
-        f"{consent_url}\n\n"
-        f"_Caso você não reconheça esta operação, ignore esta mensagem._"
-    )
-
-
-def send_whatsapp_notification(phone: str, client_name: str, order: dict, consent_url: str) -> bool:
-    """
-    Envia a notificação via WhatsApp. Se não houver token configurado,
-    imprime no log e simula o envio com sucesso.
-    """
-    message = format_consent_message(client_name, order, consent_url)
-
-    if not WHATSAPP_API_URL or not WHATSAPP_API_TOKEN:
-        logger.info(
-            f"\n{'='*60}\n"
-            f"[NOTIFIER - SIMULAÇÃO WHATSAPP] Para: {phone}\n"
-            f"{message}\n"
-            f"{'='*60}"
-        )
+def send_push_notification(client_name: str, order: dict, consent_url: str) -> bool:
+    if not firebase_admin._apps:
+        print("[NOTIFIER - SIMULAÇÃO] SDK não inicializado.")
         return True
 
     try:
-        headers = {
-            "Authorization": f"Bearer {WHATSAPP_API_TOKEN}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "number": phone,
-            "message": message
-        }
-        response = requests.post(WHATSAPP_API_URL, json=payload, headers=headers, timeout=5)
-        if response.status_code in [200, 201]:
-            logger.info(f"[NOTIFIER] WhatsApp enviado com sucesso para {phone}")
-            return True
-        else:
-            logger.error(f"[NOTIFIER] Falha ao enviar WhatsApp: {response.status_code} - {response.text}")
-            return False
+        # Monta a mensagem
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title="🚨 GuardrailAI - Autorização de Ordem",
+                body=f"Nova ordem de {order.get('action')} para {order.get('ticker')} (R$ {order.get('total_cost', 0.0):.2f})",
+            ),
+            # Adiciona o campo 'data' com a URL para o Service Worker
+            data={"consentUrl": consent_url},
+            token=TARGET_DEVICE_TOKEN,
+        )
+        response = messaging.send(message)
+        print(f"📲 [NOTIFIER] Push FCM enviado! Message ID: {response}")
+        return True
     except Exception as e:
-        logger.error(f"[NOTIFIER] Erro de conexão com gateway WhatsApp: {e}")
+        print(f"❌ [NOTIFIER] Falha ao enviar Push: {e}")
         return False

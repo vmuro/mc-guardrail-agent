@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+
+agent-python/config/fcm-service-account.json
+

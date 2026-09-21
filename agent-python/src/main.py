@@ -18,7 +18,11 @@ from src.core.consent import (
     authorize_biometric_passkey,
     create_fido_consent_challenge
 )
+from src.core.notifier import send_push_notification
 from src.core.logger import log_event
+
+# URL Base para a tela de consentimento FIDO2 (ngrok ou localhost)
+FIDO_BASE_URL = os.getenv("FIDO_BASE_URL", "http://localhost:8080").rstrip("/")
 
 
 def load_job_configuration() -> List[Dict[str, Any]]:
@@ -68,7 +72,6 @@ def load_job_configuration() -> List[Dict[str, Any]]:
 
     args, unknown = parser.parse_known_args()
 
-    # Verifica se a flag --config ou -f foi passada explicitamente na linha de comando
     config_specified_in_cli = any(arg in sys.argv for arg in ["--config", "-f"])
     cli_single_specified = any(arg in sys.argv for arg in ["--client-id", "-c", "--budget", "-b", "--risk-profile", "-r", "--watchlist", "-w"])
 
@@ -84,7 +87,6 @@ def load_job_configuration() -> List[Dict[str, Any]]:
                     if isinstance(clients_data, list) and len(clients_data) > 0:
                         return clients_data
 
-    # Se parâmetros de cliente individual foram passados na CLI
     if cli_single_specified:
         watchlist = [t.strip().upper() for t in args.watchlist.split(",") if t.strip()]
         return [
@@ -97,7 +99,6 @@ def load_job_configuration() -> List[Dict[str, Any]]:
             }
         ]
 
-    # Fallback: Tenta carregar config/clients.json ou clients.json na raiz ou em agent-python
     search_paths = [
         os.path.join(REPO_ROOT, "config", "clients.json"),
         os.path.join(REPO_ROOT, "..", "config", "clients.json"),
@@ -111,7 +112,6 @@ def load_job_configuration() -> List[Dict[str, Any]]:
                 if isinstance(clients_data, list) and len(clients_data) > 0:
                     return clients_data
 
-    # Fallback final: cliente único padrão
     watchlist = [t.strip().upper() for t in args.watchlist.split(",") if t.strip()]
     return [
         {
@@ -149,13 +149,14 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
     Executa o pipeline completo de governança para a carteira de um cliente.
     """
     client_id = client_config.get("client_id", "anonymous_client")
+    client_name = client_config.get("name", client_id)
     segment = client_config.get("segment", "Varejo")
     budget = float(client_config.get("budget", client_config.get("allocated_budget", 5000.0)))
     risk_profile = client_config.get("risk_profile", "MODERATE")
-    watchlist = client_config.get("watchlist", ["PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBDC4.SA"])
+    watchlist = client_config.get("watchlist", client_config.get("target_assets", ["PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBDC4.SA"]))
 
     print("\n" + "=" * 75)
-    print(f"👤 PROCESSANDO INVESTIDOR: {client_id} ({segment})")
+    print(f"👤 PROCESSANDO INVESTIDOR: {client_name} ({segment}) [ID: {client_id}]")
     print(f"   Perfil de Risco: {risk_profile} | Orçamento: R$ {budget:,.2f}")
     print(f"   Watchlist: {', '.join(watchlist)}")
     print("=" * 75)
@@ -167,7 +168,7 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
         print(f"⚠️ Aviso: Não há dados de mercado disponíveis para a watchlist de {client_id}.")
         return
 
-    # 1. Tomada de Decisão com LLM
+    # 1. Tomada de Decisão com Gemini
     print(f"\n🧠 [1/3] Consultando Gemini (Vertex AI) para tese de portfólio...")
     raw_decision = analyze_market_with_gemini(
         client_snapshot,
@@ -175,7 +176,7 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
         risk_profile=risk_profile
     )
 
-    # 2. Interceptação e Auditoria do Guardrail
+    # 2. Validação e Auditoria do Guardrail
     print(f"🛡️ [2/3] Interceptando com Guardrail Engine (Q = ⌊B/P⌋, Stop-Loss e Perfil {risk_profile})...")
     audit = validate_portfolio_proposal(
         raw_decision,
@@ -185,8 +186,8 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
         auto_adjust_quantity=True
     )
 
-    # 3. Consentimento Regulatório e Não-Repúdio
-    print(f"🔐 [3/3] Gerando Consentimento Regulatório CVM (Payload Binding HMAC + TTL 120s)...")
+    # 3. Consentimento Regulatório e Notificação Push (FCM)
+    print(f"🔐 [3/3] Gerando Consentimento Regulatório e Disparando Push FCM...")
     consent_records = []
 
     for audit_item in audit.approved_orders:
@@ -199,19 +200,28 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
                 "unit_price": order.unit_price,
                 "total_cost": order.total_cost,
                 "stop_loss_price": order.stop_loss_price,
-                "whatsapp_phone": client_config.get("whatsapp_phone"),
-                "client_name": client_config.get("name", client_id)
+                "client_name": client_name
             }
-            # Registra no servidor FIDO Spring Boot (REST) e gera o desafio
-            fido_res = create_fido_consent_challenge(client_config, order_payload)
-            challenge_id = fido_res.get("challenge_id", fido_res.get("challengeId"))
 
+            # Registra no servidor FIDO Spring Boot (REST) e obtém o challengeId
+            fido_res = create_fido_consent_challenge(client_config, order_payload)
+            challenge_id = fido_res.get("challenge_id", fido_res.get("challengeId", "challenge_simulated"))
+            consent_url = f"{FIDO_BASE_URL}/consent.html?challengeId={challenge_id}"
+
+            # Dispara a notificação Push via FCM
+            print(f"📲 Disparando Notificação Push (FCM) para autorização...")
+            send_push_notification(
+                client_name=client_name,
+                order=order_payload,
+                consent_url=consent_url
+            )
+
+            # Estrutura do desafio criptográfico interno
             challenge = create_consent_challenge(
                 order_data=order_payload,
                 user_id=client_id,
                 ttl_seconds=120
             )
-            # Vincula o ID gerado para correlação
             challenge.consent_id = challenge_id
 
             authorized = authorize_biometric_passkey(
@@ -239,6 +249,7 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
                 "mathematical_hallucination_shield": True,
                 "cryptographic_payload_binding": True,
                 "biometric_passkey_verified": True,
+                "fcm_push_notification": True,
                 "ttl_seconds": 120
             }
         }
@@ -262,16 +273,11 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
     if consent_records:
         print(f"\n🔐 NÃO-REPÚDIO & CVM COMPLIANCE:")
         for c in consent_records:
-            if isinstance(c, dict):
-                cid = c.get("consent_id", c.get("challenge_id", "n/a"))
-                status = c.get("status", "AUTHORIZED")
-                auth = c.get("auth_method", "PASSKEY_FIDO2_BIOMETRIC")
-            else:
-                cid = getattr(c, "consent_id", "n/a")
-                status = getattr(c, "status", "AUTHORIZED")
-                auth = getattr(c, "auth_method", "PASSKEY_FIDO2_BIOMETRIC")
+            cid = c.get("consent_id", c.get("challenge_id", "n/a")) if isinstance(c, dict) else getattr(c, "consent_id", "n/a")
+            status = c.get("status", "PENDING_BIOMETRIC") if isinstance(c, dict) else getattr(c, "status", "PENDING_BIOMETRIC")
+            auth = c.get("auth_method", "PASSKEY_FIDO2_BIOMETRIC") if isinstance(c, dict) else getattr(c, "auth_method", "PASSKEY_FIDO2_BIOMETRIC")
             print(f"  - Desafio ID: {cid} | Status: {status} ({auth}) | TTL: 120s")
-            print(f"    🔗 URL WebAuthn: http://localhost:8080/consent.html?challengeId={cid}")
+            print(f"    🔗 URL WebAuthn: {FIDO_BASE_URL}/consent.html?challengeId={cid}")
 
     if audit.rejected_orders:
         print(f"\n🛑 ORDENS REJEITADAS ({len(audit.rejected_orders)}):")
@@ -289,7 +295,7 @@ def run_pipeline():
     print(f"📋 Total de Clientes / Carteiras para Processamento: {len(clients)}")
 
     all_tickers = sorted(list(set(
-        ticker for c in clients for ticker in c.get("watchlist", ["PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBDC4.SA"])
+        ticker for c in clients for ticker in c.get("watchlist", c.get("target_assets", ["PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBDC4.SA"]))
     )))
     print(f"🌐 Universo de Ativos B3 Monitorados: {', '.join(all_tickers)}")
 

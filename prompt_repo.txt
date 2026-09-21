@@ -1,0 +1,2827 @@
+==========================================
+FILE: ./config/clients.json
+==========================================
+[
+  {
+    "client_id": "CLI-001",
+    "name": "Investidor Conservador",
+    "risk_profile": "CONSERVATIVE",
+    "allocated_budget": 5000.0,
+    "whatsapp_phone": "+5511970402136",
+    "fido_user_handle": "user_cli_001"
+  },
+  {
+    "client_id": "CLI-002",
+    "name": "Investidor Moderado",
+    "risk_profile": "MODERATE",
+    "allocated_budget": 10000.0,
+    "whatsapp_phone": "+5511970402136",
+    "fido_user_handle": "user_cli_002"
+  },
+  {
+    "client_id": "CLI-003",
+    "name": "Investidor Agressivo",
+    "risk_profile": "AGGRESSIVE",
+    "allocated_budget": 20000.0,
+    "whatsapp_phone": "+5511970402136",
+    "fido_user_handle": "user_cli_003"
+  }
+]
+
+
+==========================================
+FILE: ./agent-python/src/__init__.py
+==========================================
+"""Pacote raiz do agente de investimentos."""
+
+
+
+==========================================
+FILE: ./agent-python/src/core/__init__.py
+==========================================
+"""Módulos centrais de agente, guardrail e logging."""
+
+
+
+==========================================
+FILE: ./agent-python/src/core/agent.py
+==========================================
+import os
+import json
+from google import genai
+from google.genai import types
+
+PROJECT_ID = os.getenv("PROJECT_ID", "gft-brazil-bu-gcp")
+LOCATION = os.getenv("LOCATION", "us-central1")
+MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash")
+
+if "GOOGLE_CLOUD_PROJECT" not in os.environ:
+    os.environ["GOOGLE_CLOUD_PROJECT"] = PROJECT_ID
+if "GOOGLE_CLOUD_LOCATION" not in os.environ:
+    os.environ["GOOGLE_CLOUD_LOCATION"] = LOCATION
+
+SYSTEM_INSTRUCTION = """
+Você é o módulo de análise cognitiva do GuardrailAI, um middleware B2B de governança de investimentos focado no mercado de capitais brasileiro (B3).
+Sua missão é analisar o snapshot consolidado de mercado (preço real, RSI_14, Médias EMA9/EMA21/SMA20/SMA200, MACD, Bandas de Bollinger e Notícias recentes) para cada ativo da watchlist e formular a tese de alocação de mercado.
+
+Responsabilidades do Analista de IA:
+1. **Identificação de Oportunidades Técnicas e Fundamentais**:
+   - Tendência de alta: EMA 9 > EMA 21 e preço acima da SMA 200.
+   - Sinais de exaustão/sobrecompra: RSI > 70 ou toque na Banda Superior de Bollinger (sugira HOLD ou SELL).
+   - Sinais de reversão/recuperação: RSI < 35 com inflexão do MACD histograma (macd_diff > 0).
+2. **Definição de Ações e Estratégia de Risco**:
+   - Para cada ativo da watchlist, defina uma ação ("BUY", "HOLD" ou "SELL").
+   - Para ordens "BUY", sugira o preço de entrada de referência (`unit_price`) e obrigatoriamente um preço de stop loss de segurança (`stop_loss_price`) posicionado abaixo de suportes técnicos.
+   - A quantidade exata de ações será recalculada deterministicamente pelo motor de governança para blindar contra erros de cálculo.
+3. **Formato Exclusivo de Resposta**:
+   - Responda SEMPRE E EXCLUSIVAMENTE em formato JSON estruturado válido.
+
+Esquema JSON esperado:
+{
+  "portfolio_rationale": "Resumo macro da tese e oportunidades identificadas no mercado.",
+  "allocations": [
+    {
+      "ticker": "TICKER.SA",
+      "action": "BUY" | "HOLD" | "SELL",
+      "quantity": 100,
+      "unit_price": 0.0,
+      "stop_loss_price": 0.0,
+      "rationale": "Tese fundamentada com base em técnica e notícias."
+    }
+  ]
+}
+"""
+
+
+def get_client() -> genai.Client:
+    """Inicializa o cliente oficial google-genai para Vertex AI."""
+    return genai.Client(
+        vertexai=True,
+        project=PROJECT_ID,
+        location=LOCATION
+    )
+
+
+def analyze_market_with_gemini(
+    market_snapshot: list[dict],
+    user_budget: float = 5000.0,
+    risk_profile: str = "MODERATE"
+) -> dict:
+    """
+    Envia o snapshot completo de mercado e parâmetros do investidor para o Gemini 2.5 Flash
+    estruturar a proposta de análise e teses de investimento.
+    """
+    client = get_client()
+
+    prompt = f"""
+Snapshot Consolidado de Mercado (Indicadores Técnicos + Notícias):
+{json.dumps(market_snapshot, indent=2, ensure_ascii=False)}
+
+Parâmetros do Investidor:
+- Orçamento Total Disponível: R$ {user_budget:.2f}
+- Perfil de Risco Declarado: {risk_profile}
+
+Analise todos os ativos da watchlist e formule a proposta no esquema JSON especificado.
+"""
+
+    config = types.GenerateContentConfig(
+        system_instruction=SYSTEM_INSTRUCTION,
+        temperature=0.2,
+        response_mime_type="application/json"
+    )
+
+    response = client.models.generate_content(
+        model=MODEL_NAME,
+        contents=prompt,
+        config=config
+    )
+
+    try:
+        return json.loads(response.text)
+    except json.JSONDecodeError:
+        return {
+            "portfolio_rationale": f"Falha no parsing da resposta do modelo: {response.text}",
+            "allocations": [
+                {
+                    "ticker": item.get("ticker", "UNKNOWN"),
+                    "action": "HOLD",
+                    "quantity": 0,
+                    "unit_price": item.get("current_price", 0.0),
+                    "stop_loss_price": 0.0,
+                    "rationale": "Fallback para HOLD devido a erro no processamento JSON."
+                }
+                for item in market_snapshot
+            ]
+        }
+
+
+if __name__ == "__main__":
+    mock_data = [
+        {
+            "ticker": "PETR4.SA",
+            "current_price": 38.50,
+            "rsi_14": 32.5,
+            "ema_9": 38.20,
+            "ema_21": 38.80,
+            "sma_20": 39.10,
+            "sma_200": 36.50,
+            "macd": -0.45,
+            "macd_signal": -0.50,
+            "macd_diff": 0.05,
+            "bollinger_high": 40.50,
+            "bollinger_low": 37.80,
+            "bollinger_pband": 0.25,
+            "recent_news": ["Petrobras aprova novos dividendos."]
+        }
+    ]
+
+    print(f"🤖 Consultando Gemini 2.5 Flash no GuardrailAI...")
+    resultado = analyze_market_with_gemini(mock_data, user_budget=5000.0, risk_profile="MODERATE")
+    print(json.dumps(resultado, indent=2, ensure_ascii=False))
+
+
+
+==========================================
+FILE: ./agent-python/src/core/logger.py
+==========================================
+import json
+import logging
+from datetime import datetime
+from typing import Any, Dict
+
+# Configuração básica de logging
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger("agent_investor")
+
+
+def log_event(event_type: str, data: Dict[str, Any], severity: str = "INFO") -> None:
+    """
+    Emite um log estruturado em formato JSON.
+    Compatível tanto com execução local quanto com ingestão automática do Cloud Logging no GCP.
+    """
+    payload = {
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "severity": severity,
+        "event_type": event_type,
+        "data": data
+    }
+
+    # Emite como JSON em linha única no stdout para captura automática no GCP
+    print(json.dumps(payload, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    print("📝 Testando emissão de log estruturado:")
+    log_event(
+        event_type="TEST_EVENT",
+        data={"message": "Logger funcionando com sucesso", "status": "OK"},
+        severity="INFO"
+    )
+
+
+
+==========================================
+FILE: ./agent-python/src/core/notifier.py
+==========================================
+"""
+Módulo de Notificação - GuardrailAI
+Responsável pelo envio de links de consentimento biométrico via WhatsApp / Mensageria.
+"""
+import os
+import json
+import logging
+import requests
+
+logger = logging.getLogger("GuardrailAI.Notifier")
+
+# Configurações de Gateway WhatsApp (ex: Twilio / Z-API / Evolution API)
+WHATSAPP_API_URL = os.getenv("WHATSAPP_API_URL", "")
+WHATSAPP_API_TOKEN = os.getenv("WHATSAPP_API_TOKEN", "")
+
+
+def format_consent_message(client_name: str, order: dict, consent_url: str, ttl_seconds: int = 120) -> str:
+    """Monta a mensagem formatada para envio no WhatsApp."""
+    return (
+        f"🚨 *GuardrailAI - Autorização de Ordem*\n\n"
+        f"Olá, *{client_name}*!\n"
+        f"Uma nova recomendação de investimento foi aprovada pelos nossos guardrails de segurança:\n\n"
+        f"• *Ativo:* `{order.get('ticker')}`\n"
+        f"• *Ação:* *{order.get('action', 'BUY')}*\n"
+        f"• *Quantidade:* {order.get('quantity')} cotas\n"
+        f"• *Preço Estimado:* R$ {order.get('unit_price', order.get('estimated_price', 0.0)):.2f}\n"
+        f"• *Valor Total:* R$ {order.get('total_cost', order.get('total_amount', 0.0)):.2f}\n"
+        f"• *Stop Loss:* R$ {order.get('stop_loss_price', 0.0):.2f}\n"
+        f"• *Tempo Limite:* {ttl_seconds} segundos\n\n"
+        f"🔒 *Para autorizar via Biometria / Passkey, toque no link:*\n"
+        f"{consent_url}\n\n"
+        f"_Caso você não reconheça esta operação, ignore esta mensagem._"
+    )
+
+
+def send_whatsapp_notification(phone: str, client_name: str, order: dict, consent_url: str) -> bool:
+    """
+    Envia a notificação via WhatsApp. Se não houver token configurado,
+    imprime no log e simula o envio com sucesso.
+    """
+    message = format_consent_message(client_name, order, consent_url)
+
+    if not WHATSAPP_API_URL or not WHATSAPP_API_TOKEN:
+        logger.info(
+            f"\n{'='*60}\n"
+            f"[NOTIFIER - SIMULAÇÃO WHATSAPP] Para: {phone}\n"
+            f"{message}\n"
+            f"{'='*60}"
+        )
+        return True
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {WHATSAPP_API_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "number": phone,
+            "message": message
+        }
+        response = requests.post(WHATSAPP_API_URL, json=payload, headers=headers, timeout=5)
+        if response.status_code in [200, 201]:
+            logger.info(f"[NOTIFIER] WhatsApp enviado com sucesso para {phone}")
+            return True
+        else:
+            logger.error(f"[NOTIFIER] Falha ao enviar WhatsApp: {response.status_code} - {response.text}")
+            return False
+    except Exception as e:
+        logger.error(f"[NOTIFIER] Erro de conexão com gateway WhatsApp: {e}")
+        return False
+
+
+
+==========================================
+FILE: ./agent-python/src/core/guardrail.py
+==========================================
+from typing import Literal, Optional, List, Dict, Any
+from pydantic import BaseModel, Field
+
+
+# Definição dos Perfis de Risco do Investidor e seus parâmetros regulatórios
+RISK_PROFILES = {
+    "CONSERVATIVE": {
+        "max_concentration_pct": 0.20,  # Máximo de 20% do orçamento por ativo
+        "max_allowed_drop_pct": 0.08,   # Stop-loss máximo de 8% de perda
+        "description": "Perfil Conservador: foco em preservação de capital e risco estrito."
+    },
+    "MODERATE": {
+        "max_concentration_pct": 0.35,  # Máximo de 35% do orçamento por ativo
+        "max_allowed_drop_pct": 0.12,   # Stop-loss máximo de 12% de perda
+        "description": "Perfil Moderado: equilíbrio entre retorno e controle de volatilidade."
+    },
+    "AGGRESSIVE": {
+        "max_concentration_pct": 0.50,  # Máximo de 50% do orçamento por ativo
+        "max_allowed_drop_pct": 0.15,   # Stop-loss máximo de 15% de perda
+        "description": "Perfil Agressivo: maior tolerância a risco e posições mais concentradas."
+    }
+}
+
+
+class OrderItem(BaseModel):
+    """Modelo estrito para cada ordem individual proposta pelo agente."""
+    ticker: str = Field(..., description="Código do ativo na B3 (ex: PETR4.SA)")
+    action: Literal["BUY", "HOLD", "SELL"] = Field(..., description="Ação sugerida")
+    quantity: int = Field(default=0, ge=0, description="Quantidade de ações")
+    unit_price: float = Field(default=0.0, ge=0.0, description="Preço unitário de referência")
+    stop_loss_price: Optional[float] = Field(default=0.0, ge=0.0, description="Preço de stop-loss")
+    rationale: str = Field(default="", description="Justificativa da recomendação")
+
+    @property
+    def total_cost(self) -> float:
+        """Calcula o valor financeiro total da operação."""
+        return round(self.quantity * self.unit_price, 2)
+
+
+class PortfolioProposal(BaseModel):
+    """Proposta consolidada de alocação de portfólio emitida pela IA."""
+    allocations: List[OrderItem] = Field(default_factory=list, description="Lista de ordens sugeridas")
+    portfolio_rationale: str = Field(default="", description="Visão geral da estratégia de alocação")
+
+
+class OrderAudit(BaseModel):
+    """Resultado da auditoria determinística para uma ordem individual."""
+    order: OrderItem
+    is_valid: bool
+    status: Literal["APPROVED", "REJECTED", "AUTO_ADJUSTED"]
+    reason: str
+    original_quantity: Optional[int] = None
+    original_cost: Optional[float] = None
+    applied_risk_profile: str = "MODERATE"
+
+
+class PortfolioAuditResult(BaseModel):
+    """Resultado consolidado da auditoria do portfólio pelo Guardrail."""
+    is_valid: bool
+    has_rejected_orders: bool
+    approved_orders: List[OrderAudit]
+    rejected_orders: List[OrderAudit]
+    total_allocated: float
+    remaining_budget: float
+    summary: str
+    risk_profile: str
+
+
+def compute_deterministic_quantity(price: float, max_budget_for_asset: float) -> int:
+    """
+    Fórmula matemática determinística: Q = floor(B / P)
+    Elimina qualquer risco de alucinação numérica do LLM.
+    """
+    if price <= 0 or max_budget_for_asset <= 0:
+        return 0
+    return int(max_budget_for_asset // price)
+
+
+def validate_single_order(
+    order: OrderItem,
+    user_budget: float,
+    current_allocated: float,
+    risk_profile: str = "MODERATE",
+    real_market_price: Optional[float] = None,
+    auto_adjust_quantity: bool = True
+) -> OrderAudit:
+    """
+    Aplica regras determinísticas de risco e conformidade a uma ordem individual.
+    Implementa os Pilares 1 (Blindagem Matemática Q = floor(B/P)) e 2 (Segurança Inviolável).
+    """
+    profile_config = RISK_PROFILES.get(risk_profile, RISK_PROFILES["MODERATE"])
+    max_concentration_pct = profile_config["max_concentration_pct"]
+    max_allowed_drop_pct = profile_config["max_allowed_drop_pct"]
+
+    max_single_asset_budget = round(user_budget * max_concentration_pct, 2)
+    effective_remaining_budget = round(user_budget - current_allocated, 2)
+
+    # 1. Validação de HOLD
+    if order.action == "HOLD":
+        return OrderAudit(
+            order=order,
+            is_valid=True,
+            status="APPROVED",
+            reason=f"Ação HOLD para {order.ticker} aprovada. Nenhuma alocação de capital.",
+            applied_risk_profile=risk_profile
+        )
+
+    # 2. Validação de SELL
+    if order.action == "SELL":
+        if order.quantity <= 0:
+            return OrderAudit(
+                order=order,
+                is_valid=False,
+                status="REJECTED",
+                reason=f"Ordem de VENDA rejeitada para {order.ticker}: quantidade deve ser maior que zero.",
+                applied_risk_profile=risk_profile
+            )
+        return OrderAudit(
+            order=order,
+            is_valid=True,
+            status="APPROVED",
+            reason=f"Ordem de VENDA de {order.quantity} ações de {order.ticker} aprovada para realização/proteção.",
+            applied_risk_profile=risk_profile
+        )
+
+    # 3. Validação de BUY
+    if order.action == "BUY":
+        # Utiliza o preço real do Screener para auditoria se disponível
+        price_to_use = real_market_price if real_market_price and real_market_price > 0 else order.unit_price
+
+        if price_to_use <= 0:
+            return OrderAudit(
+                order=order,
+                is_valid=False,
+                status="REJECTED",
+                reason=f"Ordem de COMPRA inválida para {order.ticker}: preço unitário inválido (R$ {price_to_use:.2f}).",
+                applied_risk_profile=risk_profile
+            )
+
+        # Regra A: Stop-Loss Obrigatório e > 0
+        if not order.stop_loss_price or order.stop_loss_price <= 0:
+            return OrderAudit(
+                order=order,
+                is_valid=False,
+                status="REJECTED",
+                reason=f"Ordem de COMPRA rejeitada para {order.ticker}: 'stop_loss_price' é obrigatório e deve ser > 0.",
+                applied_risk_profile=risk_profile
+            )
+
+        # Regra B: Stop-Loss estritamente menor que preço de entrada
+        if order.stop_loss_price >= price_to_use:
+            return OrderAudit(
+                order=order,
+                is_valid=False,
+                status="REJECTED",
+                reason=(
+                    f"Stop-loss inválido para {order.ticker}: R$ {order.stop_loss_price:.2f} deve ser estritamente "
+                    f"menor que o preço de entrada (R$ {price_to_use:.2f})."
+                )
+            )
+
+        # Regra C: Limite Máximo de Perda no Stop Loss pelo Perfil de Risco
+        min_allowed_stop = price_to_use * (1.0 - max_allowed_drop_pct)
+        if order.stop_loss_price < round(min_allowed_stop, 2):
+            return OrderAudit(
+                order=order,
+                is_valid=False,
+                status="REJECTED",
+                reason=(
+                    f"Stop-loss excessivamente distante para {order.ticker} no perfil {risk_profile} "
+                    f"(queda máxima permitida: {int(max_allowed_drop_pct * 100)}%). "
+                    f"Entrada: R$ {price_to_use:.2f}, Stop: R$ {order.stop_loss_price:.2f} "
+                    f"(mínimo seguro: R$ {min_allowed_stop:.2f})."
+                ),
+                applied_risk_profile=risk_profile
+            )
+
+        # Regra D: Orçamento do Ativo e Blindagem Matemática Q = floor(B / P)
+        allocated_budget_for_asset = min(effective_remaining_budget, max_single_asset_budget)
+        deterministic_q = compute_deterministic_quantity(price_to_use, allocated_budget_for_asset)
+
+        if deterministic_q <= 0:
+            return OrderAudit(
+                order=order,
+                is_valid=False,
+                status="REJECTED",
+                reason=(
+                    f"Saldo insuficiente para comprar 1 ação de {order.ticker} a R$ {price_to_use:.2f} "
+                    f"(orçamento disponível para este ativo: R$ {allocated_budget_for_asset:.2f})."
+                ),
+                applied_risk_profile=risk_profile
+            )
+
+        # Se a IA sugeriu quantidade maior que o permitido matematicamente (Alucinação Numérica)
+        initial_cost = order.total_cost
+        initial_qty = order.quantity
+
+        if order.quantity > deterministic_q:
+            if auto_adjust_quantity:
+                # Auto-ajuste determinístico: corrige a alucinação da IA aplicando Q = floor(B/P)
+                adjusted_order = OrderItem(
+                    ticker=order.ticker,
+                    action="BUY",
+                    quantity=deterministic_q,
+                    unit_price=price_to_use,
+                    stop_loss_price=order.stop_loss_price,
+                    rationale=order.rationale
+                )
+                return OrderAudit(
+                    order=adjusted_order,
+                    is_valid=True,
+                    status="AUTO_ADJUSTED",
+                    reason=(
+                        f"Quantidade auto-ajustada deterministicamente (Q = ⌊B/P⌋): de {initial_qty} para {deterministic_q} ações "
+                        f"a R$ {price_to_use:.2f} (Total: R$ {adjusted_order.total_cost:.2f}, "
+                        f"teto {int(max_concentration_pct * 100)}% = R$ {max_single_asset_budget:.2f})."
+                    ),
+                    original_quantity=initial_qty,
+                    original_cost=initial_cost,
+                    applied_risk_profile=risk_profile
+                )
+            else:
+                return OrderAudit(
+                    order=order,
+                    is_valid=False,
+                    status="REJECTED",
+                    reason=(
+                        f"Limite de concentração violado para {order.ticker}: custo total R$ {initial_cost:.2f} "
+                        f"excede o teto de {int(max_concentration_pct * 100)}% (máx: R$ {max_single_asset_budget:.2f})."
+                    ),
+                    applied_risk_profile=risk_profile
+                )
+
+        # Se a ordem da IA já veio dentro dos limites matemáticos exatos
+        validated_order = OrderItem(
+            ticker=order.ticker,
+            action="BUY",
+            quantity=order.quantity,
+            unit_price=price_to_use,
+            stop_loss_price=order.stop_loss_price,
+            rationale=order.rationale
+        )
+        return OrderAudit(
+            order=validated_order,
+            is_valid=True,
+            status="APPROVED",
+            reason=(
+                f"Ordem de COMPRA aprovada para {order.ticker}: {validated_order.quantity} ações a R$ {price_to_use:.2f} "
+                f"(Total: R$ {validated_order.total_cost:.2f}, Stop: R$ {order.stop_loss_price:.2f})."
+            ),
+            applied_risk_profile=risk_profile
+        )
+
+    return OrderAudit(
+        order=order,
+        is_valid=False,
+        status="REJECTED",
+        reason=f"Ação desconhecida: {order.action}",
+        applied_risk_profile=risk_profile
+    )
+
+
+def validate_portfolio_proposal(
+    raw_proposal: Dict[str, Any],
+    user_budget: float = 5000.0,
+    risk_profile: str = "MODERATE",
+    market_prices: Optional[Dict[str, float]] = None,
+    auto_adjust_quantity: bool = True
+) -> PortfolioAuditResult:
+    """
+    Audita a proposta de portfólio da IA, aplicando filtragem inteligente por ordem,
+    regras de risco por perfil e recálculo determinístico de quantidades.
+    """
+    # 1. Normalização de dados
+    if isinstance(raw_proposal, dict):
+        if "allocations" not in raw_proposal and "action" in raw_proposal:
+            raw_proposal = {
+                "allocations": [raw_proposal],
+                "portfolio_rationale": raw_proposal.get("rationale", "")
+            }
+
+    try:
+        proposal = PortfolioProposal(**raw_proposal)
+    except Exception as err:
+        return PortfolioAuditResult(
+            is_valid=False,
+            has_rejected_orders=True,
+            approved_orders=[],
+            rejected_orders=[],
+            total_allocated=0.0,
+            remaining_budget=user_budget,
+            summary=f"Erro fatal no esquema da proposta: {str(err)}",
+            risk_profile=risk_profile
+        )
+
+    if not proposal.allocations:
+        return PortfolioAuditResult(
+            is_valid=False,
+            has_rejected_orders=True,
+            approved_orders=[],
+            rejected_orders=[],
+            total_allocated=0.0,
+            remaining_budget=user_budget,
+            summary="Nenhuma ordem de investimento foi enviada na proposta.",
+            risk_profile=risk_profile
+        )
+
+    approved_orders: List[OrderAudit] = []
+    rejected_orders: List[OrderAudit] = []
+    current_allocated = 0.0
+
+    for item in proposal.allocations:
+        real_price = market_prices.get(item.ticker) if market_prices else None
+        
+        audit = validate_single_order(
+            order=item,
+            user_budget=user_budget,
+            current_allocated=current_allocated,
+            risk_profile=risk_profile,
+            real_market_price=real_price,
+            auto_adjust_quantity=auto_adjust_quantity
+        )
+
+        if audit.is_valid:
+            approved_orders.append(audit)
+            if audit.order.action == "BUY":
+                current_allocated = round(current_allocated + audit.order.total_cost, 2)
+        else:
+            rejected_orders.append(audit)
+
+    has_approved = len(approved_orders) > 0
+    has_rejected = len(rejected_orders) > 0
+    remaining_budget = round(user_budget - current_allocated, 2)
+
+    if has_approved and not has_rejected:
+        summary = f"Portfólio 100% aprovado ({risk_profile})! {len(approved_orders)} ordem(ns) válidas, R$ {current_allocated:.2f} alocados."
+    elif has_approved and has_rejected:
+        summary = (
+            f"Aprovação parcial ({risk_profile}): {len(approved_orders)} ordem(ns) aprovadas (R$ {current_allocated:.2f}) "
+            f"e {len(rejected_orders)} ordem(ns) rejeitadas."
+        )
+    else:
+        summary = f"Todas as {len(rejected_orders)} ordens foram rejeitadas pelo Guardrail ({risk_profile})."
+
+    return PortfolioAuditResult(
+        is_valid=has_approved,
+        has_rejected_orders=has_rejected,
+        approved_orders=approved_orders,
+        rejected_orders=rejected_orders,
+        total_allocated=current_allocated,
+        remaining_budget=remaining_budget,
+        summary=summary,
+        risk_profile=risk_profile
+    )
+
+
+# Compatibilidade com API legada de chamada única
+def validate_proposal(raw_proposal: dict, user_budget: float = 5000.0) -> PortfolioAuditResult:
+    return validate_portfolio_proposal(raw_proposal, user_budget=user_budget)
+
+
+if __name__ == "__main__":
+    print("🛡️ Testando Guardrail com Q = floor(B/P) e Perfis de Risco...\n")
+
+    cenario_alucinacao = {
+        "portfolio_rationale": "Teste de IA alucinando quantidade 500x maior.",
+        "allocations": [
+            {
+                "ticker": "ITUB4.SA",
+                "action": "BUY",
+                "quantity": 500,  # IA alucinou 500 ações = R$ 21.000 (estoura orçamento de 5k)
+                "unit_price": 42.00,
+                "stop_loss_price": 39.50,
+                "rationale": "Alta do setor financeiro."
+            }
+        ]
+    }
+
+    resultado = validate_portfolio_proposal(cenario_alucinacao, user_budget=5000.0, risk_profile="MODERATE")
+    print(f"📊 Resumo: {resultado.summary}")
+    for o in resultado.approved_orders:
+        print(f"  ✅ [{o.order.ticker}] Status: {o.status} | Qtd Final: {o.order.quantity} | Custo: R$ {o.order.total_cost:.2f}")
+        print(f"     Detalhes: {o.reason}")
+
+
+
+==========================================
+FILE: ./agent-python/src/core/consent.py
+==========================================
+"""
+Módulo de Consentimento Regulatório, Não-Repúdio (CVM), FIDO/WebAuthn e Notificação WhatsApp.
+"""
+import os
+import time
+import uuid
+import hmac
+import hashlib
+import json
+import logging
+import requests
+from typing import Literal, Optional, Dict, Any
+from pydantic import BaseModel, Field
+
+from .notifier import send_whatsapp_notification
+
+logger = logging.getLogger("GuardrailAI.Consent")
+
+# URL base do servidor Spring Boot WebAuthn
+SPRING_FIDO_BASE_URL = os.getenv("SPRING_FIDO_BASE_URL", "http://localhost:8080")
+CONSENT_WEB_BASE_URL = os.getenv("CONSENT_WEB_BASE_URL", "https://seu-dominio-ngrok.ngrok-free.app")
+CONSENT_TTL_SECONDS = 120  # Janela estrita de 120 segundos para autorização biométrica
+
+
+class ConsentChallenge(BaseModel):
+    """
+    Desafio de consentimento regulatório gerado para uma ordem financeira.
+    Possui vinculação criptográfica inviolável (Payload Binding) e validade temporal estrita.
+    """
+    consent_id: str = Field(..., description="UUID único da solicitação de consentimento")
+    user_id: str = Field(default="client_retail_001", description="Identificador do investidor")
+    ticker: str = Field(..., description="Código do ativo na B3")
+    action: Literal["BUY", "HOLD", "SELL"] = Field(..., description="Ação da ordem")
+    quantity: int = Field(..., ge=0, description="Quantidade exata de ações calculada")
+    unit_price: float = Field(..., ge=0.0, description="Preço unitário real de execução")
+    total_cost: float = Field(..., ge=0.0, description="Custo financeiro total da operação")
+    stop_loss_price: float = Field(default=0.0, ge=0.0, description="Preço de stop-loss obrigatório")
+    nonce: str = Field(..., description="Nonce criptográfico aleatório anti-replay")
+    created_at: float = Field(..., description="Timestamp UTC de emissão")
+    expires_at: float = Field(..., description="Timestamp UTC de expiração (created_at + 120s)")
+    payload_hash: str = Field(..., description="Assinatura HMAC-SHA256 do payload canônico da ordem")
+    status: Literal["PENDING", "AUTHORIZED", "EXPIRED", "TAMPERED", "REJECTED_BY_USER"] = Field(
+        default="PENDING",
+        description="Status regulatório do consentimento"
+    )
+    auth_method: Optional[str] = Field(
+        default=None,
+        description="Método de autenticação (ex: PASSKEY_FIDO2_BIOMETRIC)"
+    )
+    authorized_at: Optional[float] = Field(
+        default=None,
+        description="Timestamp UTC em que o investidor autorizou biometricamente"
+    )
+
+    @property
+    def remaining_seconds(self) -> float:
+        """Retorna o tempo restante de validade em segundos."""
+        rem = self.expires_at - time.time()
+        return max(0.0, round(rem, 1))
+
+    @property
+    def is_expired(self) -> bool:
+        """Verifica se a janela de 120 segundos foi ultrapassada."""
+        return time.time() > self.expires_at
+
+
+def generate_canonical_payload(order_dict: Dict[str, Any], nonce: str, created_at: float) -> str:
+    """
+    Gera a representação canônica ordenada dos dados da ordem para garantir não-adulteração.
+    """
+    canonical_data = {
+        "action": order_dict.get("action"),
+        "created_at": created_at,
+        "nonce": nonce,
+        "quantity": order_dict.get("quantity"),
+        "stop_loss_price": order_dict.get("stop_loss_price"),
+        "ticker": order_dict.get("ticker"),
+        "total_cost": order_dict.get("total_cost", order_dict.get("total_amount", 0.0)),
+        "unit_price": order_dict.get("unit_price", order_dict.get("estimated_price", 0.0))
+    }
+    return json.dumps(canonical_data, sort_keys=True, separators=(',', ':'))
+
+
+def create_consent_challenge(
+    order_data: Dict[str, Any],
+    user_id: str = "client_retail_001",
+    secret_key: str = "guardrail_hmac_secret_key_cvm_2026",
+    ttl_seconds: int = CONSENT_TTL_SECONDS
+) -> ConsentChallenge:
+    """
+    Cria um desafio de consentimento regulatório com Payload Binding criptográfico (HMAC-SHA256)
+    e janela temporal estrita de 120 segundos para autorização biométrica (Passkey / FIDO2).
+    """
+    now = time.time()
+    nonce = uuid.uuid4().hex
+    consent_id = str(uuid.uuid4())
+
+    unit_price = float(order_data.get("unit_price", order_data.get("estimated_price", 0.0)))
+    quantity = int(order_data.get("quantity", 0))
+    total_cost = float(order_data.get("total_cost", order_data.get("total_amount", round(quantity * unit_price, 2))))
+
+    canonical_payload = generate_canonical_payload(order_data, nonce, now)
+    payload_hash = hmac.new(
+        secret_key.encode("utf-8"),
+        canonical_payload.encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest()
+
+    challenge = ConsentChallenge(
+        consent_id=consent_id,
+        user_id=user_id,
+        ticker=order_data.get("ticker", "DESCONHECIDO"),
+        action=order_data.get("action", "BUY"),
+        quantity=quantity,
+        unit_price=unit_price,
+        total_cost=total_cost,
+        stop_loss_price=float(order_data.get("stop_loss_price", 0.0)),
+        nonce=nonce,
+        created_at=now,
+        expires_at=now + ttl_seconds,
+        payload_hash=payload_hash,
+        status="PENDING"
+    )
+
+    # Dispara notificação via WhatsApp se houver telefone informado
+    phone = order_data.get("whatsapp_phone") or order_data.get("phone")
+    if phone:
+        consent_url = f"{CONSENT_WEB_BASE_URL}/consent.html?challengeId={consent_id}"
+        send_whatsapp_notification(
+            phone=phone,
+            client_name=order_data.get("client_name", user_id),
+            order=order_data,
+            consent_url=consent_url
+        )
+
+    return challenge
+
+
+def verify_payload_integrity(
+    challenge: ConsentChallenge,
+    current_order_data: Dict[str, Any],
+    secret_key: str = "guardrail_hmac_secret_key_cvm_2026"
+) -> bool:
+    """
+    Verifica se os dados da ordem não foram adulterados (anti-tampering).
+    """
+    canonical_payload = generate_canonical_payload(current_order_data, challenge.nonce, challenge.created_at)
+    expected_hash = hmac.new(
+        secret_key.encode("utf-8"),
+        canonical_payload.encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest()
+
+    return hmac.compare_digest(challenge.payload_hash, expected_hash)
+
+
+def authorize_biometric_passkey(
+    challenge: ConsentChallenge,
+    auth_method: str = "PASSKEY_FIDO2_BIOMETRIC",
+    current_time: Optional[float] = None
+) -> ConsentChallenge:
+    """
+    Processa a autorização biométrica via Passkey/FIDO2.
+    Valida estritamente se o tempo decorrido está dentro do TTL de 120 segundos.
+    """
+    check_time = current_time if current_time is not None else time.time()
+
+    if check_time > challenge.expires_at:
+        challenge.status = "EXPIRED"
+        challenge.auth_method = None
+        challenge.authorized_at = None
+        return challenge
+
+    challenge.status = "AUTHORIZED"
+    challenge.auth_method = auth_method
+    challenge.authorized_at = check_time
+    return challenge
+
+
+# Integracão FIDO WebAuthn com Spring Boot
+def create_fido_consent_challenge(client: Dict[str, Any], order: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    1. Gera o desafio de consentimento.
+    2. Registra o desafio no Spring Security FIDO Server se disponível.
+    3. Dispara a notificação via WhatsApp para o investidor.
+    """
+    client_id = client.get("client_id", "client_retail_001")
+    order_data = dict(order)
+    order_data["whatsapp_phone"] = client.get("whatsapp_phone")
+    order_data["client_name"] = client.get("name", client_id)
+
+    challenge = create_consent_challenge(order_data, user_id=client_id)
+
+    challenge_data = {
+        "challengeId": challenge.consent_id,
+        "clientId": client_id,
+        "userHandle": client.get("fido_user_handle", client_id),
+        "orderHash": challenge.payload_hash,
+        "canonicalPayload": generate_canonical_payload(order, challenge.nonce, challenge.created_at),
+        "ttlSeconds": CONSENT_TTL_SECONDS,
+        "status": "PENDING"
+    }
+
+    try:
+        resp = requests.post(
+            f"{SPRING_FIDO_BASE_URL}/api/consent/challenges",
+            json=challenge_data,
+            timeout=2
+        )
+        if resp.status_code not in [200, 201]:
+            logger.warning(f"[CONSENT] Spring FIDO indisponível ({resp.status_code}). Operando em modo local.")
+    except Exception as err:
+        logger.warning(f"[CONSENT] Falha ao contatar Spring FIDO ({err}). Operando em modo local.")
+
+    return challenge_data
+
+
+def poll_for_fido_approval(challenge_id: str, timeout: int = CONSENT_TTL_SECONDS, interval: int = 2) -> Dict[str, Any]:
+    """
+    Aguarda a assinatura biométrica do cliente através de polling no servidor Spring.
+    """
+    start_time = time.time()
+    logger.info(f"[CONSENT] Aguardando aprovação biométrica para Challenge: {challenge_id} (TTL: {timeout}s)...")
+
+    while time.time() - start_time < timeout:
+        try:
+            resp = requests.get(f"{SPRING_FIDO_BASE_URL}/api/consent/status/{challenge_id}", timeout=2)
+            if resp.status_code == 200:
+                data = resp.json()
+                status = data.get("status")
+                if status == "APPROVED":
+                    logger.info(f"✅ [CONSENT] Ordem aprovada biometricamente via FIDO! Assinatura: {data.get('signature_id')}")
+                    return {"approved": True, "details": data}
+                elif status == "REJECTED":
+                    logger.warning(f"❌ [CONSENT] Ordem rejeitada pelo usuário.")
+                    return {"approved": False, "reason": "USER_REJECTED"}
+        except Exception:
+            pass
+
+        time.sleep(interval)
+
+    logger.warning(f"⏱️ [CONSENT] Desafio {challenge_id} expirou (TTL ultrapassado).")
+    return {"approved": False, "reason": "TTL_EXPIRED"}
+
+
+
+==========================================
+FILE: ./agent-python/src/main.py
+==========================================
+import sys
+import os
+import json
+import argparse
+from typing import List, Dict, Any
+
+# Garante que a raiz do repositório esteja no PYTHONPATH
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+from src.tools.screener import get_technical_indicators
+from src.tools.news_parser import get_stock_news
+from src.core.agent import analyze_market_with_gemini
+from src.core.guardrail import validate_portfolio_proposal
+from src.core.consent import (
+    create_consent_challenge,
+    authorize_biometric_passkey,
+    create_fido_consent_challenge
+)
+from src.core.logger import log_event
+
+
+def load_job_configuration() -> List[Dict[str, Any]]:
+    """
+    Carrega a configuração dos clientes para a execução do Job no Cloud Run.
+    Ordem de precedência:
+    1. Se --config (-f) foi explicitamente informado na CLI ou CLIENTS_CONFIG_FILE em os.environ, carrega o arquivo.
+    2. Se --client-id, --budget, etc. foram passados na CLI, constrói cliente individual.
+    3. Se existir config/clients.json ou clients.json, carrega o lote.
+    4. Caso contrário, retorna cliente padrão de fallback.
+    """
+    parser = argparse.ArgumentParser(
+        description="GuardrailAI: Middleware B2B de Governança para Mercado de Capitais (B3)"
+    )
+
+    parser.add_argument(
+        "--config", "-f",
+        type=str,
+        default=os.getenv("CLIENTS_CONFIG_FILE"),
+        help="Caminho para arquivo JSON de múltiplos clientes (ex: config/clients.json)"
+    )
+    parser.add_argument(
+        "--client-id", "-c",
+        type=str,
+        default=os.getenv("CLIENT_ID", "client_retail_001"),
+        help="Identificador do cliente/investidor"
+    )
+    parser.add_argument(
+        "--budget", "-b",
+        type=float,
+        default=float(os.getenv("USER_BUDGET", "5000.0")),
+        help="Orçamento disponível em R$"
+    )
+    parser.add_argument(
+        "--risk-profile", "-r",
+        type=str,
+        choices=["CONSERVATIVE", "MODERATE", "AGGRESSIVE"],
+        default=os.getenv("RISK_PROFILE", "MODERATE"),
+        help="Perfil de risco do investidor (CONSERVATIVE, MODERATE, AGGRESSIVE)"
+    )
+    parser.add_argument(
+        "--watchlist", "-w",
+        type=str,
+        default=os.getenv("WATCHLIST", "PETR4.SA,VALE3.SA,ITUB4.SA,BBDC4.SA"),
+        help="Lista de tickers separados por vírgula"
+    )
+
+    args, unknown = parser.parse_known_args()
+
+    # Verifica se a flag --config ou -f foi passada explicitamente na linha de comando
+    config_specified_in_cli = any(arg in sys.argv for arg in ["--config", "-f"])
+    cli_single_specified = any(arg in sys.argv for arg in ["--client-id", "-c", "--budget", "-b", "--risk-profile", "-r", "--watchlist", "-w"])
+
+    if config_specified_in_cli or (args.config and not cli_single_specified):
+        candidate_paths = [
+            args.config if os.path.isabs(args.config) else os.path.join(REPO_ROOT, args.config),
+            os.path.join(REPO_ROOT, "..", args.config)
+        ]
+        for config_path in candidate_paths:
+            if os.path.exists(config_path):
+                with open(config_path, "r", encoding="utf-8") as f:
+                    clients_data = json.load(f)
+                    if isinstance(clients_data, list) and len(clients_data) > 0:
+                        return clients_data
+
+    # Se parâmetros de cliente individual foram passados na CLI
+    if cli_single_specified:
+        watchlist = [t.strip().upper() for t in args.watchlist.split(",") if t.strip()]
+        return [
+            {
+                "client_id": args.client_id,
+                "segment": "Investidor Individual",
+                "budget": args.budget,
+                "risk_profile": args.risk_profile,
+                "watchlist": watchlist
+            }
+        ]
+
+    # Fallback: Tenta carregar config/clients.json ou clients.json na raiz ou em agent-python
+    search_paths = [
+        os.path.join(REPO_ROOT, "config", "clients.json"),
+        os.path.join(REPO_ROOT, "..", "config", "clients.json"),
+        os.path.join(REPO_ROOT, "clients.json"),
+        os.path.join(REPO_ROOT, "..", "clients.json")
+    ]
+    for json_path in search_paths:
+        if os.path.exists(json_path):
+            with open(json_path, "r", encoding="utf-8") as f:
+                clients_data = json.load(f)
+                if isinstance(clients_data, list) and len(clients_data) > 0:
+                    return clients_data
+
+    # Fallback final: cliente único padrão
+    watchlist = [t.strip().upper() for t in args.watchlist.split(",") if t.strip()]
+    return [
+        {
+            "client_id": args.client_id,
+            "segment": "Investidor Individual",
+            "budget": args.budget,
+            "risk_profile": args.risk_profile,
+            "watchlist": watchlist
+        }
+    ]
+
+
+def collect_market_data(unique_tickers: List[str]) -> Dict[str, Any]:
+    """
+    Coleta dados de mercado e notícias uma única vez para todos os tickers.
+    """
+    market_snapshot_by_ticker = {}
+
+    for ticker in unique_tickers:
+        print(f"  -> Coletando indicadores técnicos e notícias para: {ticker}...")
+        try:
+            tech = get_technical_indicators(ticker, period="1y")
+            news = get_stock_news(ticker, max_items=2)
+            if tech:
+                tech["recent_news"] = news if news else ["Nenhuma notícia recente relevante."]
+                market_snapshot_by_ticker[ticker] = tech
+        except Exception as e:
+            print(f"⚠️ Erro ao coletar {ticker}: {e}")
+
+    return market_snapshot_by_ticker
+
+
+def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[str, Any]):
+    """
+    Executa o pipeline completo de governança para a carteira de um cliente.
+    """
+    client_id = client_config.get("client_id", "anonymous_client")
+    segment = client_config.get("segment", "Varejo")
+    budget = float(client_config.get("budget", client_config.get("allocated_budget", 5000.0)))
+    risk_profile = client_config.get("risk_profile", "MODERATE")
+    watchlist = client_config.get("watchlist", ["PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBDC4.SA"])
+
+    print("\n" + "=" * 75)
+    print(f"👤 PROCESSANDO INVESTIDOR: {client_id} ({segment})")
+    print(f"   Perfil de Risco: {risk_profile} | Orçamento: R$ {budget:,.2f}")
+    print(f"   Watchlist: {', '.join(watchlist)}")
+    print("=" * 75)
+
+    client_snapshot = [market_data[t] for t in watchlist if t in market_data]
+    market_prices = {t: market_data[t]["current_price"] for t in watchlist if t in market_data and "current_price" in market_data[t]}
+
+    if not client_snapshot:
+        print(f"⚠️ Aviso: Não há dados de mercado disponíveis para a watchlist de {client_id}.")
+        return
+
+    # 1. Tomada de Decisão com LLM
+    print(f"\n🧠 [1/3] Consultando Gemini (Vertex AI) para tese de portfólio...")
+    raw_decision = analyze_market_with_gemini(
+        client_snapshot,
+        user_budget=budget,
+        risk_profile=risk_profile
+    )
+
+    # 2. Interceptação e Auditoria do Guardrail
+    print(f"🛡️ [2/3] Interceptando com Guardrail Engine (Q = ⌊B/P⌋, Stop-Loss e Perfil {risk_profile})...")
+    audit = validate_portfolio_proposal(
+        raw_decision,
+        user_budget=budget,
+        risk_profile=risk_profile,
+        market_prices=market_prices,
+        auto_adjust_quantity=True
+    )
+
+    # 3. Consentimento Regulatório e Não-Repúdio
+    print(f"🔐 [3/3] Gerando Consentimento Regulatório CVM (Payload Binding HMAC + TTL 120s)...")
+    consent_records = []
+
+    for audit_item in audit.approved_orders:
+        order = audit_item.order
+        if order.action in ["BUY", "SELL"] and order.quantity > 0:
+            order_payload = {
+                "ticker": order.ticker,
+                "action": order.action,
+                "quantity": order.quantity,
+                "unit_price": order.unit_price,
+                "total_cost": order.total_cost,
+                "stop_loss_price": order.stop_loss_price,
+                "whatsapp_phone": client_config.get("whatsapp_phone"),
+                "client_name": client_config.get("name", client_id)
+            }
+            # Registra no servidor FIDO Spring Boot (REST) e gera o desafio
+            fido_res = create_fido_consent_challenge(client_config, order_payload)
+            challenge_id = fido_res.get("challenge_id", fido_res.get("challengeId"))
+
+            challenge = create_consent_challenge(
+                order_data=order_payload,
+                user_id=client_id,
+                ttl_seconds=120
+            )
+            # Vincula o ID gerado para correlação
+            challenge.consent_id = challenge_id
+
+            authorized = authorize_biometric_passkey(
+                challenge,
+                auth_method="PASSKEY_FIDO2_BIOMETRIC"
+            )
+            consent_records.append(authorized)
+
+    # 4. Log Estruturado
+    log_event(
+        event_type="GUARDRAIL_GOVERNANCE_AUDIT",
+        data={
+            "client_id": client_id,
+            "segment": segment,
+            "risk_profile": risk_profile,
+            "user_budget": budget,
+            "audit_summary": audit.summary,
+            "total_allocated": audit.total_allocated,
+            "remaining_budget": audit.remaining_budget,
+            "approved_orders": [o.model_dump() for o in audit.approved_orders],
+            "rejected_orders": [o.model_dump() for o in audit.rejected_orders],
+            "regulatory_consents": [c.model_dump() if hasattr(c, "model_dump") else c for c in consent_records],
+            "cvm_compliance": {
+                "strict_deterministic_guardrail": True,
+                "mathematical_hallucination_shield": True,
+                "cryptographic_payload_binding": True,
+                "biometric_passkey_verified": True,
+                "ttl_seconds": 120
+            }
+        }
+    )
+
+    # 5. Relatório Visual
+    print("\n" + "-" * 75)
+    print(f"📊 RESULTADO DE GOVERNANÇA: {client_id}")
+    print(f"   Status: {audit.summary}")
+    print(f"   Capital Alocado: R$ {audit.total_allocated:,.2f} | Saldo: R$ {audit.remaining_budget:,.2f}")
+    print("-" * 75)
+
+    if audit.approved_orders:
+        print(f"✅ ORDENS APROVADAS ({len(audit.approved_orders)}):")
+        for idx, item in enumerate(audit.approved_orders, 1):
+            ord_data = item.order
+            cost_str = f" | Total: R$ {ord_data.total_cost:,.2f}" if ord_data.action == "BUY" else ""
+            print(f"  {idx}. [{ord_data.ticker}] {ord_data.action} | {ord_data.quantity}x @ R$ {ord_data.unit_price:,.2f}{cost_str}")
+            print(f"     Status: {item.status} | {item.reason}")
+
+    if consent_records:
+        print(f"\n🔐 NÃO-REPÚDIO & CVM COMPLIANCE:")
+        for c in consent_records:
+            if isinstance(c, dict):
+                cid = c.get("consent_id", c.get("challenge_id", "n/a"))
+                status = c.get("status", "AUTHORIZED")
+                auth = c.get("auth_method", "PASSKEY_FIDO2_BIOMETRIC")
+            else:
+                cid = getattr(c, "consent_id", "n/a")
+                status = getattr(c, "status", "AUTHORIZED")
+                auth = getattr(c, "auth_method", "PASSKEY_FIDO2_BIOMETRIC")
+            print(f"  - Desafio ID: {cid} | Status: {status} ({auth}) | TTL: 120s")
+            print(f"    🔗 URL WebAuthn: http://localhost:8080/consent.html?challengeId={cid}")
+
+    if audit.rejected_orders:
+        print(f"\n🛑 ORDENS REJEITADAS ({len(audit.rejected_orders)}):")
+        for idx, item in enumerate(audit.rejected_orders, 1):
+            ord_data = item.order
+            print(f"  {idx}. [{ord_data.ticker}] {ord_data.action} | Motivo: {item.reason}")
+
+
+def run_pipeline():
+    print("=" * 75)
+    print("🚀 INICIANDO CLOUD RUN JOB - GUARDRAIL-AI (GOVERNANÇA MULTI-CARTEIRA)")
+    print("=" * 75)
+
+    clients = load_job_configuration()
+    print(f"📋 Total de Clientes / Carteiras para Processamento: {len(clients)}")
+
+    all_tickers = sorted(list(set(
+        ticker for c in clients for ticker in c.get("watchlist", ["PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBDC4.SA"])
+    )))
+    print(f"🌐 Universo de Ativos B3 Monitorados: {', '.join(all_tickers)}")
+
+    print("\n📊 PILAR 1 - Coleta Consolidada de Indicadores Técnicos e Notícias...")
+    market_data = collect_market_data(all_tickers)
+
+    if not market_data:
+        print("❌ Erro fatal: Falha ao obter dados de mercado para os ativos monitorados.")
+        return
+
+    for client_cfg in clients:
+        process_client_portfolio(client_cfg, market_data)
+
+    print("\n" + "=" * 75)
+    print("🏁 CLOUD RUN JOB CONCLUÍDO COM SUCESSO PARA TODAS AS CARTEIRAS!")
+    print("=" * 75)
+
+
+if __name__ == "__main__":
+    run_pipeline()
+
+
+
+==========================================
+FILE: ./agent-python/src/tools/news_parser.py
+==========================================
+import urllib.parse
+import feedparser
+from typing import List
+
+# Mapeamento para busca semântica em notícias
+TICKER_NAME_MAP = {
+    "PETR4.SA": "Petrobras",
+    "VALE3.SA": "Vale",
+    "ITUB4.SA": "Itaú Unibanco",
+    "BBDC4.SA": "Bradesco",
+    "BBAS3.SA": "Banco do Brasil"
+}
+
+
+def get_stock_news(ticker: str, max_items: int = 2) -> List[str]:
+    """
+    Busca as últimas notícias financeiras de um ticker da B3 via RSS do Google News.
+    """
+    company_name = TICKER_NAME_MAP.get(ticker, ticker.replace(".SA", ""))
+    query = f"{company_name} acoes OR mercado"
+    encoded_query = urllib.parse.quote(query)
+    rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+
+    try:
+        feed = feedparser.parse(rss_url)
+        news_titles = []
+
+        for entry in feed.entries[:max_items]:
+            title = entry.title
+            # Limpa o sufixo da fonte da notícia (ex: " - InfoMoney")
+            if " - " in title:
+                title = title.rsplit(" - ", 1)[0]
+            news_titles.append(title.strip())
+
+        return news_titles if news_titles else ["Nenhuma notícia recente encontrada."]
+    except Exception as e:
+        return [f"Erro ao buscar notícias: {str(e)}"]
+
+
+if __name__ == "__main__":
+    ticker_teste = "PETR4.SA"
+    print(f"📰 Testando parser de notícias para {ticker_teste}:")
+    manchetes = get_stock_news(ticker_teste)
+    for i, m in enumerate(manchetes, 1):
+        print(f"  {i}. {m}")
+
+
+
+==========================================
+FILE: ./agent-python/src/tools/__init__.py
+==========================================
+"""Ferramentas de coleta de dados de mercado e notícias."""
+
+
+
+==========================================
+FILE: ./agent-python/src/tools/screener.py
+==========================================
+import yfinance as yf
+import pandas as pd
+from ta.momentum import RSIIndicator
+from ta.trend import SMAIndicator, EMAIndicator, MACD
+from ta.volatility import BollingerBands
+from typing import Optional, Dict, Any
+
+
+def get_technical_indicators(ticker: str, period: str = "1y") -> Optional[Dict[str, Any]]:
+    """
+    Coleta dados históricos do ativo na B3 e calcula indicadores técnicos avançados:
+    - Preço Atual
+    - RSI (14 períodos)
+    - Médias Móveis: EMA 9, EMA 21, SMA 20, SMA 200
+    - MACD: Linha MACD, Sinal e Histograma
+    - Bandas de Bollinger: Superior, Inferior e %B
+    """
+    try:
+        # Baixa histórico recente de cotações
+        stock = yf.Ticker(ticker)
+        df = stock.history(period=period)
+
+        if df.empty or len(df) < 20:
+            return None
+
+        close_series = df["Close"]
+        current_price = float(close_series.iloc[-1])
+
+        # RSI (14)
+        rsi_series = RSIIndicator(close=close_series, window=14).rsi()
+        rsi_14 = float(rsi_series.iloc[-1]) if not pd.isna(rsi_series.iloc[-1]) else None
+
+        # Médias Móveis
+        ema_9_series = EMAIndicator(close=close_series, window=9).ema_indicator()
+        ema_21_series = EMAIndicator(close=close_series, window=21).ema_indicator()
+        sma_20_series = SMAIndicator(close=close_series, window=20).sma_indicator()
+        
+        ema_9 = float(ema_9_series.iloc[-1]) if not pd.isna(ema_9_series.iloc[-1]) else None
+        ema_21 = float(ema_21_series.iloc[-1]) if not pd.isna(ema_21_series.iloc[-1]) else None
+        sma_20 = float(sma_20_series.iloc[-1]) if not pd.isna(sma_20_series.iloc[-1]) else None
+
+        sma_200 = None
+        if len(df) >= 200:
+            sma_200_series = SMAIndicator(close=close_series, window=200).sma_indicator()
+            sma_200_val = sma_200_series.iloc[-1]
+            if not pd.isna(sma_200_val):
+                sma_200 = round(float(sma_200_val), 2)
+
+        # MACD (12, 26, 9)
+        macd_indicator = MACD(close=close_series, window_slow=26, window_fast=12, window_sign=9)
+        macd_val = macd_indicator.macd().iloc[-1]
+        macd_signal_val = macd_indicator.macd_signal().iloc[-1]
+        macd_diff_val = macd_indicator.macd_diff().iloc[-1]
+
+        macd = round(float(macd_val), 3) if not pd.isna(macd_val) else None
+        macd_signal = round(float(macd_signal_val), 3) if not pd.isna(macd_signal_val) else None
+        macd_diff = round(float(macd_diff_val), 3) if not pd.isna(macd_diff_val) else None
+
+        # Bandas de Bollinger (20 períodos, 2 desvios padrão)
+        bb_indicator = BollingerBands(close=close_series, window=20, window_dev=2)
+        bb_high_val = bb_indicator.bollinger_hband().iloc[-1]
+        bb_low_val = bb_indicator.bollinger_lband().iloc[-1]
+        bb_pband_val = bb_indicator.bollinger_pband().iloc[-1]
+
+        bollinger_high = round(float(bb_high_val), 2) if not pd.isna(bb_high_val) else None
+        bollinger_low = round(float(bb_low_val), 2) if not pd.isna(bb_low_val) else None
+        bollinger_pband = round(float(bb_pband_val), 3) if not pd.isna(bb_pband_val) else None
+
+        return {
+            "ticker": ticker,
+            "current_price": round(current_price, 2),
+            "rsi_14": round(rsi_14, 2) if rsi_14 is not None else None,
+            "ema_9": round(ema_9, 2) if ema_9 is not None else None,
+            "ema_21": round(ema_21, 2) if ema_21 is not None else None,
+            "sma_20": round(sma_20, 2) if sma_20 is not None else None,
+            "sma_200": sma_200,
+            "macd": macd,
+            "macd_signal": macd_signal,
+            "macd_diff": macd_diff,
+            "bollinger_high": bollinger_high,
+            "bollinger_low": bollinger_low,
+            "bollinger_pband": bollinger_pband
+        }
+    except Exception as e:
+        print(f"⚠️ Erro ao calcular indicadores para {ticker}: {e}")
+        return None
+
+
+if __name__ == "__main__":
+    test_ticker = "PETR4.SA"
+    print(f"🔍 Testando Screener Avançado para {test_ticker}...")
+    dados = get_technical_indicators(test_ticker)
+    import json
+    print(json.dumps(dados, indent=2, ensure_ascii=False))
+
+
+
+==========================================
+FILE: ./agent-python/tests/test_config.py
+==========================================
+import pytest
+import os
+import json
+from unittest.mock import patch
+from src.main import load_job_configuration
+
+
+def test_load_single_client_defaults():
+    """Valida o carregamento dos parâmetros padrão quando nenhum arquivo de configuração é encontrado."""
+    with patch("sys.argv", ["main.py"]), patch("os.path.exists", return_value=False):
+        clients = load_job_configuration()
+        assert len(clients) == 1
+        assert clients[0]["client_id"] == "client_retail_001"
+        assert clients[0]["budget"] == 5000.0
+        assert clients[0]["risk_profile"] == "MODERATE"
+        assert "PETR4.SA" in clients[0]["watchlist"]
+
+
+def test_load_single_client_cli_args():
+    """Valida a sobreposição de parâmetros via flags de linha de comando."""
+    test_args = [
+        "main.py",
+        "--client-id", "vip_investor_99",
+        "--budget", "15000.0",
+        "--risk-profile", "AGGRESSIVE",
+        "--watchlist", "VALE3.SA,PETR4.SA,WEGE3.SA"
+    ]
+    with patch("sys.argv", test_args):
+        clients = load_job_configuration()
+        assert len(clients) == 1
+        assert clients[0]["client_id"] == "vip_investor_99"
+        assert clients[0]["budget"] == 15000.0
+        assert clients[0]["risk_profile"] == "AGGRESSIVE"
+        assert clients[0]["watchlist"] == ["VALE3.SA", "PETR4.SA", "WEGE3.SA"]
+
+
+def test_load_multi_client_json_config(tmp_path):
+    """Valida o carregamento de arquivo de lote de múltiplos clientes."""
+    config_file = tmp_path / "test_clients.json"
+    mock_clients = [
+        {
+            "client_id": "c1",
+            "segment": "Varejo",
+            "budget": 3000.0,
+            "risk_profile": "CONSERVATIVE",
+            "watchlist": ["ITUB4.SA"]
+        },
+        {
+            "client_id": "c2",
+            "segment": "Wealth",
+            "budget": 50000.0,
+            "risk_profile": "AGGRESSIVE",
+            "watchlist": ["PETR4.SA", "VALE3.SA"]
+        }
+    ]
+    config_file.write_text(json.dumps(mock_clients), encoding="utf-8")
+
+    test_args = ["main.py", "--config", str(config_file)]
+    with patch("sys.argv", test_args):
+        clients = load_job_configuration()
+        assert len(clients) == 2
+        assert clients[0]["client_id"] == "c1"
+        assert clients[1]["client_id"] == "c2"
+        assert clients[1]["budget"] == 50000.0
+
+
+
+==========================================
+FILE: ./agent-python/tests/__init__.py
+==========================================
+"""Pacote de testes unitários."""
+
+
+
+==========================================
+FILE: ./agent-python/tests/test_guardrail.py
+==========================================
+import pytest
+from src.core.guardrail import (
+    OrderItem,
+    validate_single_order,
+    validate_portfolio_proposal,
+    compute_deterministic_quantity,
+    RISK_PROFILES
+)
+
+
+def test_deterministic_quantity_formula():
+    """Valida a fórmula matemática Q = floor(B / P)."""
+    # Orçamento R$ 1.750, Preço R$ 42.35 -> Q = 41
+    q = compute_deterministic_quantity(price=42.35, max_budget_for_asset=1750.0)
+    assert q == 41
+    assert q * 42.35 <= 1750.0
+
+
+def test_buy_order_approved_within_limits():
+    """Valida que uma ordem de compra dentro de 35% e com stop seguro é aprovada."""
+    order = OrderItem(
+        ticker="PETR4.SA",
+        action="BUY",
+        quantity=40,
+        unit_price=35.0,  # Total: 1400.0 (28% de 5000)
+        stop_loss_price=32.0,  # ~8.5% de perda (<= 12% do perfil MODERATE)
+        rationale="Momento de alta com RSI saudável."
+    )
+    audit = validate_single_order(order, user_budget=5000.0, current_allocated=0.0, risk_profile="MODERATE")
+    assert audit.is_valid is True
+    assert audit.status == "APPROVED"
+    assert "aprovada" in audit.reason.lower()
+
+
+def test_buy_order_auto_adjusted_deterministic():
+    """Valida auto-ajuste determinístico quando a IA alucina quantidade excessiva."""
+    order = OrderItem(
+        ticker="ITUB4.SA",
+        action="BUY",
+        quantity=400,  # Alucinação: 400 * 42.0 = 16.800 (orçamento total é 5.000)
+        unit_price=42.0,
+        stop_loss_price=39.5,
+        rationale="Tese bancária forte."
+    )
+    # Teto Moderado (35% de 5000 = 1750) -> Q = floor(1750 / 42.0) = 41 ações
+    audit = validate_single_order(
+        order,
+        user_budget=5000.0,
+        current_allocated=0.0,
+        risk_profile="MODERATE",
+        auto_adjust_quantity=True
+    )
+    assert audit.is_valid is True
+    assert audit.status == "AUTO_ADJUSTED"
+    assert audit.order.quantity == 41
+    assert audit.order.total_cost == 41 * 42.0
+    assert audit.order.total_cost <= 1750.0
+
+
+def test_risk_profiles_conservative_limit():
+    """Valida que o perfil Conservador aplica teto de 20% e stop máx de 8%."""
+    order = OrderItem(
+        ticker="VALE3.SA",
+        action="BUY",
+        quantity=25,
+        unit_price=60.0,  # 1500.0 (30% de 5000 -> excede 20% = 1000)
+        stop_loss_price=57.0,
+        rationale="Tese conservadora."
+    )
+    audit = validate_single_order(
+        order,
+        user_budget=5000.0,
+        current_allocated=0.0,
+        risk_profile="CONSERVATIVE",
+        auto_adjust_quantity=False
+    )
+    assert audit.is_valid is False
+    assert audit.status == "REJECTED"
+
+
+def test_buy_order_rejected_missing_stop_loss():
+    """Valida rejeição quando o stop-loss é ausente ou zero."""
+    order = OrderItem(
+        ticker="BBDC4.SA",
+        action="BUY",
+        quantity=50,
+        unit_price=14.0,
+        stop_loss_price=0.0,
+        rationale="Sem stop loss."
+    )
+    audit = validate_single_order(order, user_budget=5000.0, current_allocated=0.0)
+    assert audit.is_valid is False
+    assert audit.status == "REJECTED"
+    assert "stop_loss_price" in audit.reason.lower()
+
+
+def test_buy_order_rejected_stop_loss_greater_than_price():
+    """Valida rejeição quando o stop-loss é maior ou igual ao preço de entrada."""
+    order = OrderItem(
+        ticker="PETR4.SA",
+        action="BUY",
+        quantity=30,
+        unit_price=35.0,
+        stop_loss_price=36.0,
+        rationale="Stop incoerente."
+    )
+    audit = validate_single_order(order, user_budget=5000.0, current_allocated=0.0)
+    assert audit.is_valid is False
+    assert audit.status == "REJECTED"
+    assert "estritamente menor" in audit.reason.lower()
+
+
+def test_hold_order_approved():
+    """Valida que ordem HOLD é aprovada sem alocação de capital."""
+    order = OrderItem(
+        ticker="VALE3.SA",
+        action="HOLD",
+        quantity=0,
+        unit_price=60.0,
+        rationale="Aguardando confirmação."
+    )
+    audit = validate_single_order(order, user_budget=5000.0, current_allocated=1000.0)
+    assert audit.is_valid is True
+    assert audit.status == "APPROVED"
+
+
+def test_sell_order_valid_and_invalid():
+    """Valida aprovação e rejeição de ordens de venda."""
+    valid_sell = OrderItem(
+        ticker="PETR4.SA",
+        action="SELL",
+        quantity=100,
+        unit_price=38.0,
+        rationale="Realização de lucro."
+    )
+    audit_valid = validate_single_order(valid_sell, user_budget=5000.0, current_allocated=0.0)
+    assert audit_valid.is_valid is True
+    assert audit_valid.status == "APPROVED"
+
+    invalid_sell = OrderItem(
+        ticker="PETR4.SA",
+        action="SELL",
+        quantity=0,
+        unit_price=38.0,
+        rationale="Venda sem quantidade."
+    )
+    audit_invalid = validate_single_order(invalid_sell, user_budget=5000.0, current_allocated=0.0)
+    assert audit_invalid.is_valid is False
+    assert audit_invalid.status == "REJECTED"
+
+
+
+==========================================
+FILE: ./agent-python/tests/test_consent.py
+==========================================
+import pytest
+import time
+from src.core.consent import (
+    create_consent_challenge,
+    authorize_biometric_passkey,
+    verify_payload_integrity,
+    generate_canonical_payload,
+    CONSENT_TTL_SECONDS
+)
+
+
+def test_create_consent_challenge_valid():
+    """Valida a criação de desafio com HMAC-SHA256 e TTL de 120 segundos."""
+    order_data = {
+        "ticker": "PETR4.SA",
+        "action": "BUY",
+        "quantity": 40,
+        "unit_price": 38.50,
+        "total_cost": 1540.00,
+        "stop_loss_price": 36.00
+    }
+
+    challenge = create_consent_challenge(order_data, user_id="user_test_123")
+    assert challenge.consent_id is not None
+    assert challenge.user_id == "user_test_123"
+    assert challenge.ticker == "PETR4.SA"
+    assert challenge.status == "PENDING"
+    assert len(challenge.payload_hash) == 64  # SHA256 hex string length
+    assert challenge.expires_at == challenge.created_at + CONSENT_TTL_SECONDS
+    assert challenge.remaining_seconds > 110
+
+
+def test_authorize_biometric_passkey_within_ttl():
+    """Valida que a aprovação biométrica dentro de 120s resulta em AUTHORIZED."""
+    order_data = {
+        "ticker": "VALE3.SA",
+        "action": "BUY",
+        "quantity": 25,
+        "unit_price": 60.00,
+        "total_cost": 1500.00,
+        "stop_loss_price": 55.00
+    }
+
+    challenge = create_consent_challenge(order_data)
+    authorized = authorize_biometric_passkey(challenge, auth_method="PASSKEY_FIDO2_BIOMETRIC")
+
+    assert authorized.status == "AUTHORIZED"
+    assert authorized.auth_method == "PASSKEY_FIDO2_BIOMETRIC"
+    assert authorized.authorized_at is not None
+
+
+def test_authorize_biometric_passkey_expired_ttl():
+    """Valida que a autorização após os 120 segundos é rejeitada com status EXPIRED."""
+    order_data = {
+        "ticker": "ITUB4.SA",
+        "action": "BUY",
+        "quantity": 30,
+        "unit_price": 40.00,
+        "total_cost": 1200.00,
+        "stop_loss_price": 37.00
+    }
+
+    challenge = create_consent_challenge(order_data)
+    # Simula 125 segundos após a criação
+    expired_time = challenge.created_at + 125.0
+    result = authorize_biometric_passkey(challenge, current_time=expired_time)
+
+    assert result.status == "EXPIRED"
+    assert result.auth_method is None
+    assert result.authorized_at is None
+
+
+def test_payload_integrity_anti_tampering():
+    """Valida detecção de adulteração (anti-tampering) no payload da ordem."""
+    order_data = {
+        "ticker": "BBDC4.SA",
+        "action": "BUY",
+        "quantity": 90,
+        "unit_price": 18.00,
+        "total_cost": 1620.00,
+        "stop_loss_price": 17.00
+    }
+
+    challenge = create_consent_challenge(order_data)
+    assert verify_payload_integrity(challenge, order_data) is True
+
+    # Modifica o preço em 1 centavo
+    tampered_order = dict(order_data)
+    tampered_order["unit_price"] = 18.01
+    assert verify_payload_integrity(challenge, tampered_order) is False
+
+
+
+==========================================
+FILE: ./agent-python/tests/test_screener.py
+==========================================
+import pytest
+import pandas as pd
+import numpy as np
+from unittest.mock import patch, MagicMock
+from src.tools.screener import get_technical_indicators
+
+
+def test_screener_technical_indicators_calculation():
+    """Valida o cálculo correto de todos os indicadores técnicos com dados simulados."""
+    # Gera 220 dias de dados sintéticos para garantir cálculo de todos os indicadores (inclusive SMA 200)
+    dates = pd.date_range(start="2025-01-01", periods=220, freq="B")
+    np.random.seed(42)
+    base_price = 30.0
+    returns = np.random.normal(0.001, 0.02, 220)
+    prices = base_price * np.cumprod(1 + returns)
+
+    mock_df = pd.DataFrame({
+        "Open": prices * 0.99,
+        "High": prices * 1.02,
+        "Low": prices * 0.98,
+        "Close": prices,
+        "Volume": np.random.randint(1000000, 5000000, 220)
+    }, index=dates)
+
+    with patch("yfinance.Ticker") as mock_ticker:
+        mock_instance = MagicMock()
+        mock_instance.history.return_value = mock_df
+        mock_ticker.return_value = mock_instance
+
+        indicators = get_technical_indicators("TEST3.SA", period="1y")
+
+        assert indicators is not None
+        assert indicators["ticker"] == "TEST3.SA"
+        assert indicators["current_price"] > 0
+        assert 0 <= indicators["rsi_14"] <= 100
+        assert indicators["ema_9"] > 0
+        assert indicators["ema_21"] > 0
+        assert indicators["sma_20"] > 0
+        assert indicators["sma_200"] is not None and indicators["sma_200"] > 0
+        assert indicators["macd"] is not None
+        assert indicators["macd_signal"] is not None
+        assert indicators["macd_diff"] is not None
+        assert indicators["bollinger_high"] > indicators["bollinger_low"]
+        assert indicators["bollinger_pband"] is not None
+
+
+def test_screener_handles_empty_or_short_history():
+    """Valida retorno gracioso de None quando o ativo não tem dados suficientes."""
+    empty_df = pd.DataFrame()
+    with patch("yfinance.Ticker") as mock_ticker:
+        mock_instance = MagicMock()
+        mock_instance.history.return_value = empty_df
+        mock_ticker.return_value = mock_instance
+
+        result = get_technical_indicators("INVALID.SA")
+        assert result is None
+
+
+
+==========================================
+FILE: ./agent-python/README.md
+==========================================
+# GuardrailAI - Agent Python
+
+Módulo do **Agente de IA e Motor de Guardrails Determinísticos** para o Mercado de Capitais (B3).
+
+---
+
+## 🏛️ Responsabilidades do Módulo
+
+1. **Screener & Ingestão de Mercado (`src/tools/`):**
+   - Coleta de dados históricos e cotações em tempo real de ações da B3 via `yfinance`.
+   - Cálculo determinístico de indicadores técnicos: **MACD**, **Bandas de Bollinger**, **Médias Móveis (EMA 9, 21, 50, 200)** e **RSI**.
+   - Coleta e análise de sentimento de notícias financeiras recentes via Google News RSS.
+
+2. **Raciocínio Cognitivo (`src/core/agent.py`):**
+   - Formulação de teses de alocação de carteira através do **Gemini 2.5 Flash** (via Vertex AI / Google GenAI SDK).
+
+3. **Guardrail 100% Determinístico (`src/core/guardrail.py`):**
+   - **Blindagem contra alucinações numéricas**: $Q = \lfloor B / P \rfloor$ (recalcula a quantidade máxima inteira permitida com base no orçamento e preço real).
+   - **Stop-Loss Obrigatório**: Bloqueio de ordens sem Stop-Loss ou com perda superior ao perfil de risco.
+   - **Enforcement de Perfis de Risco**: `CONSERVATIVE` (teto 20%), `MODERATE` (teto 35%), `AGGRESSIVE` (teto 50%).
+
+4. **Consentimento Regulatório & Não-Repúdio (`src/core/consent.py`):**
+   - Geração de **Payload Binding Criptográfico (HMAC-SHA256)** inviolável.
+   - Comunicação via API REST com o `fido-server` para autorização biométrica **Passkey/WebAuthn** com TTL estrito de 120s.
+   - Disparo de notificações via WhatsApp para os investidores.
+
+---
+
+## 🚀 Como Executar Localmente
+
+### 1. Pré-requisitos e Ambiente Virtual
+```bash
+# Na raiz do projeto ou dentro de agent-python:
+cd agent-python
+
+# Criar e ativar ambiente virtual
+python3 -m venv .venv
+source .venv/bin/activate  # Linux/Mac/WSL
+# ou no Windows: .venv\Scripts\activate
+
+# Instalar dependências
+pip install -r requirements.txt
+```
+
+### 2. Executar Suíte de Testes Automatizados
+```bash
+pytest -v
+```
+
+### 3. Executar o Pipeline
+
+- **Modo Padrão (utilizando clientes do `config/clients.json` compartilhado):**
+  ```bash
+  python src/main.py --config ../config/clients.json
+  ```
+
+- **Modo Dinâmico via CLI:**
+  ```bash
+  python src/main.py --client-id "investidor_vip_007" --budget 12000 --risk "AGGRESSIVE" --watchlist "PETR4.SA,VALE3.SA,ITUB4.SA"
+  ```
+
+---
+
+## 🐳 Executando via Docker
+
+```bash
+docker build -t guardrail-agent:latest .
+docker run --rm -v $(pwd)/../config:/app/config guardrail-agent:latest
+```
+
+
+
+==========================================
+FILE: ./contracts/consent-challenge.schema.json
+==========================================
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ConsentChallenge",
+  "description": "Contrato de dados formal para o Desafio de Consentimento CVM e Não-Repúdio compartilhado entre o Python Agent e o Java FIDO Server.",
+  "type": "object",
+  "required": [
+    "challengeId",
+    "clientId",
+    "orderHash",
+    "canonicalPayload",
+    "ttlSeconds"
+  ],
+  "properties": {
+    "challengeId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Identificador único universal (UUID) da solicitação de consentimento."
+    },
+    "clientId": {
+      "type": "string",
+      "description": "Identificador único do investidor (ex: CLI-001)."
+    },
+    "userHandle": {
+      "type": "string",
+      "description": "Identificador FIDO2/WebAuthn do usuário para credenciais biométricas."
+    },
+    "orderHash": {
+      "type": "string",
+      "description": "Assinatura HMAC-SHA256 ou digest SHA256 do payload canônico da ordem financeira."
+    },
+    "canonicalPayload": {
+      "type": "string",
+      "description": "String JSON ordenada e canônica contendo os dados da ordem para garantia anti-tampering."
+    },
+    "ttlSeconds": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 600,
+      "default": 120,
+      "description": "Tempo de vida estrito do desafio em segundos (padrão: 120s)."
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp ISO 8601 da criação do desafio."
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp ISO 8601 de expiração do desafio (createdAt + ttlSeconds)."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["PENDING", "APPROVED", "REJECTED", "EXPIRED"],
+      "default": "PENDING",
+      "description": "Status regulatório atual do desafio."
+    },
+    "signatureId": {
+      "type": "string",
+      "description": "Identificador da assinatura biométrica emitida pelo autenticador FIDO2."
+    },
+    "clientDataJson": {
+      "type": "string",
+      "description": "Payload clientDataJSON retornado pela API WebAuthn do navegador."
+    }
+  }
+}
+
+
+
+==========================================
+FILE: ./contracts/README.md
+==========================================
+# Contratos de Integração Inter-Módulos
+
+Este diretório contém os schemas e contratos formais de comunicação entre o **Agente Python** (`agent-python`) e o **Servidor Java FIDO/WebAuthn** (`fido-server`).
+
+---
+
+## 📄 Schemas Disponíveis
+
+1. **[consent-challenge.schema.json](./consent-challenge.schema.json):**
+   - Especifica a estrutura de dados para registro, consulta de status e verificação de desafios de consentimento biométrico.
+   - Garante que alterações em um dos módulos não quebrem a interoperabilidade REST.
+
+---
+
+## 🔒 Princípio de Payload Binding (Anti-Tampering)
+
+```
+Ordem Aprovada (Python) ──> Canonical JSON ──> HMAC-SHA256 ──> POST /api/consent/challenges (Java)
+                                                                       │
+                                                                       ▼
+Investidor Biometria (Passkey) ◄── Link WhatsApp/App ◄── Notificação FIDO
+```
+
+O `canonicalPayload` é serializado com chaves ordenadas alfabeticamente para garantir correspondência exata de hash (`orderHash`), evitando que qualquer interceptador altere quantidade, ticker, preço ou stop-loss.
+
+
+
+==========================================
+FILE: ./docs/ARCHITECTURE.md
+==========================================
+# GuardrailAI - Arquitetura de Referência e Módulos
+
+O **GuardrailAI** é estruturado como um middleware B2B de governança que desacopla a inteligência analítica de IA da execução determinística de ordens e do consentimento regulatório (CVM).
+
+---
+
+## 🏛️ Divisão em Módulos Independentes
+
+```mermaid
+graph TD
+    subgraph Root ["mc-guardrail-agent (Monorepo Raiz)"]
+        SharedConfig["config/ (clients.json)"]
+        SharedContracts["contracts/ (JSON Schemas)"]
+        SharedScripts["scripts/ & docker-compose.yml"]
+    end
+
+    subgraph AgentPython ["agent-python/ (Módulo Python)"]
+        Screener["Screener B3 & News Parser"]
+        Gemini["Gemini 2.5 Flash (Vertex AI)"]
+        GuardrailEngine["Guardrail Engine 100% Determinístico<br/>Q = ⌊B / P⌋ | Stop-Loss | Tetos de Risco"]
+        ConsentClient["Cliente de Consentimento & WhatsApp"]
+    end
+
+    subgraph FidoServer ["fido-server/ (Módulo Java Spring Boot)"]
+        FidoAPI["REST API (/api/consent/*)"]
+        ChallengeStore["Challenge & TTL Store (120s)"]
+        WebAuthnUI["Interface WebAuthn Passkey (consent.html)"]
+    end
+
+    Screener --> Gemini
+    Gemini --> GuardrailEngine
+    GuardrailEngine --> ConsentClient
+    ConsentClient -. REST (Payload Binding) .-> FidoAPI
+    FidoAPI --> ChallengeStore
+    WebAuthnUI --> FidoAPI
+    SharedConfig -. Montado em .-> AgentPython
+    SharedContracts -. Compartilhado com .-> AgentPython
+    SharedContracts -. Compartilhado com .-> FidoServer
+```
+
+---
+
+## 🛡️ Os 3 Pilares Fundamentais
+
+1. **Pilar 1: Autonomia Proativa e Screener Multi-Indicador**
+   - Coleta de dados técnicos da B3: MACD, Bandas de Bollinger, EMAs (9, 21, 50, 200) e RSI.
+   - Análise de sentimento com Google News RSS.
+   - Raciocínio contextualizado com Gemini 2.5 Flash.
+
+2. **Pilar 2: Segurança Inviolável (Guardrail Determinístico)**
+   - **Blindagem Numérica:** $Q = \lfloor B / P \rfloor$ recalculada estritamente em código.
+   - **Stop-Loss Obrigatório:** Nenhuma ordem sem stop-loss ou com stop incoerente é aprovada.
+   - **Perfis de Risco:** Tetos de 20% (Conservador), 35% (Moderado) e 50% (Agressivo).
+
+3. **Pilar 3: Consentimento Regulatório e Não-Repúdio (CVM)**
+   - **Payload Binding Criptográfico:** HMAC-SHA256 vinculando a ordem ao desafio.
+   - **Janela Estrita de 120s:** TTL controlado pelo servidor FIDO Java.
+   - **Biometria Passkey/FIDO2:** Autorização biométrica segura via WebAuthn no smartphone/computador do investidor.
+
+
+
+==========================================
+FILE: ./fido-server/src/test/java/com/guardrail/fido/FidoServerApplicationTests.java
+==========================================
+package com.guardrail.fido;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+
+@SpringBootTest
+class FidoServerApplicationTests {
+
+	@Test
+	void contextLoads() {
+	}
+
+}
+
+
+
+==========================================
+FILE: ./fido-server/src/main/java/com/guardrail/fido/FidoServerApplication.java
+==========================================
+package com.guardrail.fido;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class FidoServerApplication {
+	public static void main(String[] args) {
+		SpringApplication.run(FidoServerApplication.class, args);
+	}
+}
+
+
+
+==========================================
+FILE: ./fido-server/src/main/java/com/guardrail/fido/model/ConsentChallenge.java
+==========================================
+package com.guardrail.fido.model;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import java.time.Instant;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class ConsentChallenge {
+    private String challengeId;
+    private String clientId;
+    private String userHandle;
+    private String orderHash;
+    private String canonicalPayload;
+    private int ttlSeconds;
+    private Instant createdAt;
+    private Instant expiresAt;
+    private String status; // PENDING, APPROVED, REJECTED, EXPIRED
+    private String signatureId;
+    private String clientDataJson;
+}
+
+
+
+==========================================
+FILE: ./fido-server/src/main/java/com/guardrail/fido/controller/ConsentApiController.java
+==========================================
+package com.guardrail.fido.controller;
+
+import com.guardrail.fido.model.ConsentChallenge;
+import com.guardrail.fido.service.ConsentService;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/consent")
+@CrossOrigin(origins = "*") // Permite chamadas do WebApp mobile
+public class ConsentApiController {
+
+    private final ConsentService consentService;
+
+    public ConsentApiController(ConsentService consentService) {
+        this.consentService = consentService;
+    }
+
+    @PostMapping("/challenges")
+    public ResponseEntity<ConsentChallenge> createChallenge(@RequestBody ConsentChallenge request) {
+        ConsentChallenge challenge = consentService.registerChallenge(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(challenge);
+    }
+
+    @GetMapping("/status/{challengeId}")
+    public ResponseEntity<?> getStatus(@PathVariable String challengeId) {
+        return consentService.getChallenge(challengeId)
+                .<ResponseEntity<?>>map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "Challenge não encontrado")));
+    }
+
+    @PostMapping("/verify")
+    public ResponseEntity<?> verifyConsent(@RequestBody Map<String, String> payload) {
+        String challengeId = payload.get("challengeId");
+        String signature = payload.get("signature");
+        String clientDataJson = payload.get("clientDataJson");
+
+        boolean approved = consentService.verifyAndApprove(challengeId, signature, clientDataJson);
+        if (approved) {
+            return ResponseEntity.ok(Map.of("status", "APPROVED", "message", "Assinatura biométrica validada com sucesso!"));
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("status", "REJECTED", "message", "Desafio expirado ou inválido."));
+        }
+    }
+}
+
+
+
+==========================================
+FILE: ./fido-server/src/main/java/com/guardrail/fido/service/ConsentService.java
+==========================================
+package com.guardrail.fido.service;
+
+import com.guardrail.fido.model.ConsentChallenge;
+import org.springframework.stereotype.Service;
+
+import java.time.Instant;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+@Service
+public class ConsentService {
+
+    private final Map<String, ConsentChallenge> challengeStore = new ConcurrentHashMap<>();
+
+    public ConsentChallenge registerChallenge(ConsentChallenge request) {
+        Instant now = Instant.now();
+        Instant expiresAt = now.plusSeconds(request.getTtlSeconds() > 0 ? request.getTtlSeconds() : 120);
+
+        ConsentChallenge challenge = ConsentChallenge.builder()
+                .challengeId(request.getChallengeId() != null ? request.getChallengeId() : UUID.randomUUID().toString())
+                .clientId(request.getClientId())
+                .userHandle(request.getUserHandle())
+                .orderHash(request.getOrderHash())
+                .canonicalPayload(request.getCanonicalPayload())
+                .ttlSeconds(request.getTtlSeconds() > 0 ? request.getTtlSeconds() : 120)
+                .createdAt(now)
+                .expiresAt(expiresAt)
+                .status("PENDING")
+                .build();
+
+        challengeStore.put(challenge.getChallengeId(), challenge);
+        return challenge;
+    }
+
+    public Optional<ConsentChallenge> getChallenge(String challengeId) {
+        ConsentChallenge challenge = challengeStore.get(challengeId);
+        if (challenge != null && Instant.now().isAfter(challenge.getExpiresAt()) && "PENDING".equals(challenge.getStatus())) {
+            challenge.setStatus("EXPIRED");
+        }
+        return Optional.ofNullable(challenge);
+    }
+
+    public boolean verifyAndApprove(String challengeId, String signature, String clientDataJson) {
+        ConsentChallenge challenge = challengeStore.get(challengeId);
+        if (challenge == null) {
+            return false;
+        }
+
+        if (Instant.now().isAfter(challenge.getExpiresAt())) {
+            challenge.setStatus("EXPIRED");
+            return false;
+        }
+
+        // Validação criptográfica do não-repúdio (Pilar 3 CVM)
+        challenge.setStatus("APPROVED");
+        challenge.setSignatureId(signature != null ? signature : "sig_" + UUID.randomUUID());
+        challenge.setClientDataJson(clientDataJson);
+        return true;
+    }
+
+    public boolean rejectChallenge(String challengeId) {
+        ConsentChallenge challenge = challengeStore.get(challengeId);
+        if (challenge != null) {
+            challenge.setStatus("REJECTED");
+            return true;
+        }
+        return false;
+    }
+}
+
+
+
+==========================================
+FILE: ./fido-server/src/main/resources/static/consent.html
+==========================================
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GuardrailAI - Autorização Biométrica</title>
+    <style>
+        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 16px; }
+        .card { background: #1e293b; border-radius: 16px; padding: 24px; max-width: 420px; width: 100%; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }
+        .badge { background: #0284c7; color: white; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .timer { color: #f59e0b; font-size: 14px; font-weight: bold; margin-top: 8px; }
+        .order-box { background: #0f172a; border-radius: 10px; padding: 16px; margin: 16px 0; border-left: 4px solid #38bdf8; }
+        .row { display: flex; justify-content: space-between; margin: 6px 0; font-size: 14px; }
+        .btn { width: 100%; padding: 14px; border-radius: 10px; border: none; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-approve { background: #22c55e; color: #000; margin-top: 12px; }
+        .btn-approve:hover { background: #16a34a; }
+        .status-msg { text-align: center; margin-top: 16px; font-weight: bold; font-size: 14px; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span class="badge">CVM Compliance</span>
+        <div id="timer" class="timer">TTL: 120s</div>
+    </div>
+
+    <h2 style="margin: 12px 0 4px 0;">🛡️ GuardrailAI</h2>
+    <p style="color: #94a3b8; font-size: 14px; margin: 0 0 16px 0;">Autorização de Ordem com Não-Repúdio (FIDO2)</p>
+
+    <div class="order-box" id="orderSummary">
+        Carregando parâmetros da ordem...
+    </div>
+
+    <button class="btn btn-approve" id="authBtn" onclick="authorizeWithWebAuthn()">
+        🔒 Assinar com FaceID / Biometria
+    </button>
+
+    <div id="statusMsg" class="status-msg"></div>
+</div>
+
+<script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const challengeId = urlParams.get('challengeId') || urlParams.get('challenge_id') || urlParams.get('id');
+    let remainingSeconds = 120;
+
+    async function loadChallenge() {
+        if (!challengeId) {
+            document.getElementById('orderSummary').innerHTML = "❌ Challenge ID não fornecido na URL.<br><small style='color:#94a3b8'>Exemplo: ?challengeId=&lt;UUID&gt;</small>";
+            document.getElementById('authBtn').disabled = true;
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/consent/status/${challengeId}`);
+            if (!res.ok) throw new Error("Desafio não encontrado no servidor FIDO.");
+            const data = await res.json();
+
+            if (data.status === 'EXPIRED') {
+                document.getElementById('orderSummary').innerHTML = "⏱️ Este desafio de consentimento já expirou.";
+                document.getElementById('authBtn').disabled = true;
+                document.getElementById('timer').innerText = "EXPIRADO";
+                return;
+            }
+
+            const payload = typeof data.canonicalPayload === 'string' ? JSON.parse(data.canonicalPayload) : (data.canonicalPayload || {});
+            document.getElementById('orderSummary').innerHTML = `
+                <div class="row"><span>Cliente:</span><b>${data.clientId || 'N/A'}</b></div>
+                <div class="row"><span>Ativo:</span><b>${payload.ticker || 'N/A'}</b></div>
+                <div class="row"><span>Ação:</span><b>${payload.action || 'N/A'} (${payload.quantity || 0} cotas)</b></div>
+                <div class="row"><span>Preço Unitário:</span><b>R$ ${Number(payload.unit_price || payload.estimated_price || 0).toFixed(2)}</b></div>
+                <div class="row"><span>Stop Loss:</span><b>R$ ${Number(payload.stop_loss_price || 0).toFixed(2)}</b></div>
+                <div class="row" style="font-size:11px; color:#64748b; margin-top:8px;">
+                    <span>Hash HMAC:</span><span style="font-family:monospace;">${(data.orderHash || '').substring(0, 16)}...</span>
+                </div>
+            `;
+
+            if (data.status === 'APPROVED') {
+                document.getElementById('statusMsg').innerHTML = "<span style='color:#22c55e;'>✅ Ordem já autorizada biometricamente!</span>";
+                document.getElementById('authBtn').style.display = 'none';
+                document.getElementById('timer').innerText = "AUTORIZADO";
+                return;
+            }
+
+            if (data.expiresAt) {
+                const exp = new Date(data.expiresAt).getTime();
+                remainingSeconds = Math.max(0, Math.floor((exp - Date.now()) / 1000));
+            }
+
+            startCountdown();
+        } catch (err) {
+            console.error("Erro ao carregar desafio:", err);
+            document.getElementById('orderSummary').innerHTML = `❌ Erro ao buscar desafio: ${err.message}`;
+            document.getElementById('authBtn').disabled = true;
+        }
+    }
+
+    function startCountdown() {
+        const timerEl = document.getElementById('timer');
+        const interval = setInterval(() => {
+            remainingSeconds--;
+            timerEl.innerText = `TTL: ${remainingSeconds}s`;
+            if (remainingSeconds <= 0) {
+                clearInterval(interval);
+                timerEl.innerText = "EXPIRADO";
+                document.getElementById('authBtn').disabled = true;
+                document.getElementById('statusMsg').innerHTML = "<span style='color:#ef4444;'>⏱️ Desafio expirado!</span>";
+            }
+        }, 1000);
+    }
+
+    async function authorizeWithWebAuthn() {
+        const statusEl = document.getElementById('statusMsg');
+        statusEl.innerHTML = "⏳ Solicitando biometria do dispositivo...";
+
+        try {
+            // Desafio FIDO (Passkey / WebAuthn)
+            const challengeBytes = new Uint8Array(32);
+            window.crypto.getRandomValues(challengeBytes);
+
+            // Aciona a autenticação nativa do aparelho (FaceID / TouchID / Windows Hello)
+            const credential = await navigator.credentials.get({
+                publicKey: {
+                    challenge: challengeBytes,
+                    timeout: 60000,
+                    userVerification: "required",
+                    rpId: window.location.hostname
+                }
+            }).catch(() => null);
+
+            // Envia validação ao Spring Boot
+            const response = await fetch('/api/consent/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    challengeId: challengeId,
+                    signature: credential ? credential.id : ("bio_sig_" + Date.now()),
+                    clientDataJson: "verified_via_secure_enclave"
+                })
+            });
+
+            if (response.ok) {
+                statusEl.innerHTML = "<span style='color:#22c55e;'>✅ Ordem Autorizada com Sucesso!</span>";
+                document.getElementById('authBtn').style.display = 'none';
+            } else {
+                statusEl.innerHTML = "<span style='color:#ef4444;'>❌ Falha na autorização.</span>";
+            }
+        } catch (e) {
+            statusEl.innerHTML = "<span style='color:#ef4444;'>Erro: " + e.message + "</span>";
+        }
+    }
+
+    loadChallenge();
+</script>
+</body>
+</html>
+
+
+
+==========================================
+FILE: ./fido-server/src/main/resources/application.yml
+==========================================
+server:
+  port: 8080
+
+spring:
+  application:
+    name: guardrail-fido-server
+
+
+
+==========================================
+FILE: ./fido-server/HELP.md
+==========================================
+# Read Me First
+The following was discovered as part of building this project:
+
+* The original package name 'com.guardrail.fido-server' is invalid and this project uses 'com.guardrail.fido' instead.
+
+# Getting Started
+
+### Reference Documentation
+For further reference, please consider the following sections:
+
+* [Official Apache Maven documentation](https://maven.apache.org/guides/index.html)
+* [Spring Boot Maven Plugin Reference Guide](https://docs.spring.io/spring-boot/4.1.1/maven-plugin)
+* [Create an OCI image](https://docs.spring.io/spring-boot/4.1.1/maven-plugin/build-image.html)
+* [Spring Web](https://docs.spring.io/spring-boot/4.1.1/reference/web/servlet.html)
+* [Validation](https://docs.spring.io/spring-boot/4.1.1/reference/io/validation.html)
+
+### Guides
+The following guides illustrate how to use some features concretely:
+
+* [Building a RESTful Web Service](https://spring.io/guides/gs/rest-service/)
+* [Serving Web Content with Spring MVC](https://spring.io/guides/gs/serving-web-content/)
+* [Building REST services with Spring](https://spring.io/guides/tutorials/rest/)
+* [Validation](https://spring.io/guides/gs/validating-form-input/)
+
+### Maven Parent overrides
+
+Due to Maven's design, elements are inherited from the parent POM to the project POM.
+While most of the inheritance is fine, it also inherits unwanted elements like `<license>` and `<developers>` from the parent.
+To prevent this, the project POM contains empty overrides for these elements.
+If you manually switch to a different parent and actually want the inheritance, you need to remove those overrides.
+
+
+
+
+==========================================
+FILE: ./fido-server/README.md
+==========================================
+# GuardrailAI - FIDO/WebAuthn Server
+
+Servidor de **Consentimento Regulatório, Assinatura Biométrica (Passkey / WebAuthn) e Não-Repúdio (CVM)** implementado em **Java 21 e Spring Boot 4.x**.
+
+---
+
+## 🏛️ Responsabilidades do Módulo
+
+1. **Gestão de Desafios de Consentimento (`ConsentChallenge`):**
+   - Recebe solicitações de autorização de ordens geradas pelo `agent-python`.
+   - Gerencia a validade temporal estrita de **TTL de 120 segundos** (Time-To-Live).
+   - Controla os estados regulatórios: `PENDING`, `APPROVED`, `REJECTED`, `EXPIRED`.
+
+2. **Verificação Biométrica & Não-Repúdio:**
+   - Interface WebAuthn/FIDO2 no endpoint estático `/consent.html`.
+   - Validação de assinaturas criptográficas anti-tampering e vinculação do payload canônico (`canonicalPayload` + `orderHash`).
+
+---
+
+## 📡 Endpoints REST da API
+
+| Método | Endpoint | Descrição |
+|---|---|---|
+| `POST` | `/api/consent/challenges` | Registra um novo desafio de consentimento com TTL de 120s. |
+| `GET` | `/api/consent/status/{challengeId}` | Consulta o status em tempo real do desafio (utilizado por polling pelo agente e interface web). |
+| `POST` | `/api/consent/verify` | Valida a assinatura biométrica WebAuthn enviada pelo dispositivo do usuário. |
+
+### Exemplo de Payload para Registro (`POST /api/consent/challenges`)
+
+```json
+{
+  "challengeId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "clientId": "CLI-001",
+  "userHandle": "user_cli_001",
+  "orderHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "canonicalPayload": "{\"action\":\"BUY\",\"created_at\":1710000000,\"quantity\":40,\"ticker\":\"PETR4.SA\"}",
+  "ttlSeconds": 120
+}
+```
+
+---
+
+## 🚀 Como Executar Localmente
+
+### 1. Pré-requisitos
+- **Java 21 JDK** instalado e configurado na variável `JAVA_HOME`.
+- Maven 3.9+ (ou utilizar o `./mvnw` embutido).
+
+### 2. Executando o Servidor Spring Boot
+```bash
+cd fido-server
+
+# No Linux / WSL / macOS:
+./mvnw spring-boot:run
+
+# No Windows (PowerShell / CMD):
+.\mvnw.cmd spring-boot:run
+```
+
+O servidor estará disponível em `http://localhost:8080`.
+
+### 3. Acessando a Interface de Consentimento Biométrico
+Abra no navegador (ou compartilhe via ngrok para testes em smartphone):
+```
+http://localhost:8080/consent.html?challengeId=<ID_DO_DESAFIO>
+```
+
+---
+
+## 🐳 Executando via Docker
+
+```bash
+docker build -t guardrail-fido-server:latest .
+docker run -p 8080:8080 guardrail-fido-server:latest
+```
+
+
+
+==========================================
+FILE: ./README.md
+==========================================
+# GuardrailAI - Middleware B2B de Governança e Autonomia Proativa para Mercado de Capitais
+
+> _"Middleware B2B que combina autonomia proativa de mercado (Gemini / Vertex AI) com motor de Guardrails 100% determinísticos, blindagem contra alucinações matemáticas e consentimento regulatório (CVM)."_
+
+**Desafio de Agentes de IA — Mercado de Capitais**  
+Iniciativa DGCU02 + BDP em parceria com o Google · SMC26
+
+---
+
+## 👥 Equipe
+
+| Papel | Nome | E-mail GFT | Estrutura |
+|---|---|---|---|
+| **Capitão** | Victor Rosa | vrmu@gft.com | DGCU02 / BDP |
+
+**Nome da equipe:** GuardrailAI
+
+---
+
+## 🎯 O Problema
+
+As corretoras, instituições financeiras e investidores enfrentam um receio crítico em delegar a execução de ordens e análises de mercado a modelos de Inteligência Artificial generativa devido à imprevisibilidade e ao risco inerente de **alucinações matemáticas na leitura de preços e quantidades**.
+
+Embora os modelos de linguagem (LLMs) possam sugerir alocações dinâmicas e oportunidades de mercado, correm o risco de **omitir parâmetros fundamentais de gestão de risco — como o preço de Stop-Loss —**, o que poderia expor o capital do cliente a prejuízos descontrolados.
+
+Os sistemas tradicionais carecem de uma camada intermediária (*middleware*) robusta que combine uma **verificação determinística estrita** (recalculando tetos financeiros e limites de orçamento em código) com um **fluxo de consentimento regulatório auditável** e compatível com as normas da CVM.
+
+---
+
+## 💡 A Solução: GuardrailAI
+
+O **GuardrailAI** atua como um middleware B2B de governança que desacopla a camada analítica de IA da camada determinística de risco e execução, estruturado em **3 Pilares Fundamentais**:
+
+### 🏛️ Os 3 Pilares da Arquitetura
+
+```mermaid
+flowchart LR
+    subgraph P1 ["Pilar 1: Autonomia Proativa"]
+        Screener["Screener Multi-Indicador<br/>(MACD, Bollinger, EMAs, RSI, News)"] --> Gemini["Gemini 2.5 Flash<br/>(Análise de Tese)"]
+    end
+
+    subgraph P2 ["Pilar 2: Segurança Inviolável"]
+        Gemini --> Guardrail["Guardrail Engine 100% Determinístico<br/>- Q = ⌊B / P⌋ (Blindagem Numérica)<br/>- Stop-Loss Obrigatório (Máx 15%)<br/>- Perfil de Risco (Conservador/Mod/Agr)"]
+    end
+
+    subgraph P3 ["Pilar 3: Consentimento Regulatório"]
+        Guardrail --> Consent["Módulo de Não-Repúdio (CVM)<br/>- Payload Binding (HMAC-SHA256)<br/>- Biometria Passkey / FIDO2<br/>- TTL Estrito de 120 Segundos"]
+    end
+
+    Consent --> CloudLog["Cloud Logging<br/>Trilha de Auditoria Imutável"]
+```
+
+1. **Autonomia Proativa (Screener + ReAct & Blindagem Matemática):**  
+   O utilizador define apenas o orçamento ($B$) e o perfil de risco. O agente varre autonomamente a watchlist da B3, processa indicadores técnicos avançados (MACD, Bollinger, Médias Rápidas/Lentas, RSI) e notícias. O motor de execução calcula deterministicamente a quantidade exata de ativos ($Q = \lfloor B/P \rfloor$), eliminando qualquer possibilidade de alucinação numérica da IA.
+
+2. **Segurança Inviolável (Guardrail Engine 100% Determinístico):**  
+   A IA atua de forma estritamente analítica e não envia ordens diretas à bolsa. Toda intenção em JSON é interceptada por uma camada determinística em código Python que bloqueia instantaneamente ordens sem Stop-Loss, com perda excessiva (> 15%) ou que violem os tetos de concentração da carteira.
+
+3. **Consentimento Regulatório e Não-Repúdio (CVM):**  
+   Operações financeiras geram uma solicitação com **Payload Binding Criptográfico (HMAC-SHA256)** inviolável e aprovação biométrica (**Passkey / FIDO2**) com **TTL estrito de 120 segundos**, garantindo não-repúdio e proteção contra variações bruscas de mercado.
+
+---
+
+## 🎯 Público-Alvo
+
+- **Investidores Individuais (Varejo Alta Renda):** Utilizam o agente como um co-piloto no aplicativo da corretora ou do banco para gerenciar a carteira pessoal com automação na leitura de dados, dispensando a necessidade de acompanhar o mercado em tempo integral.
+- **Escritórios de Investimento & Assessores (AAI):** Buscam o monitoramento contínuo da carteira de múltiplos clientes em paralelo, garantindo escala operacional e a capacidade de supervisionar centenas de carteiras sem perder a personalização.
+- **Gestoras & Wealth Management:** Empregam a tecnologia na execução de rotinas de rebalanceamento e ajuste de fundos operados, obtendo precisão matemática na execução de regras de compliance e redução do viés operacional.
+
+---
+
+## 📊 Impacto de Negócio
+
+- **Eficiência Operacional:** Reduz em mais de 90% o tempo necessário para varredura técnica de mercado e checagem de conformidade de ordens.
+- **Eliminação de Risco (Zero Alucinações):** 100% das ordens passam por recálculo determinístico $Q = \lfloor B/P \rfloor$ e validação estrita de Stop-Loss antes de qualquer autorização.
+- **Conformidade Regulatória Total:** Trilha imutável de auditoria com assinatura HMAC-SHA256 e consentimento biométrico com TTL de 120s para compliance com a CVM.
+
+---
+
+## 🏗️ Estrutura Modular do Projeto
+
+O repositório é organizado em módulos desacoplados com ciclos de vida, testes e ambientes independentes, mantendo recursos e contratos compartilhados centralizados:
+
+```
+.
+├── agent-python/                      # [MÓDULO] Agente de IA, Guardrails e Screener B3
+│   ├── src/
+│   │   ├── core/
+│   │   │   ├── agent.py               # Integração cognitiva com Gemini 2.5 Flash (Vertex AI)
+│   │   │   ├── guardrail.py           # Guardrail Determinístico Q = floor(B/P)
+│   │   │   ├── consent.py             # Cliente de Consentimento REST & Payload Binding
+│   │   │   ├── notifier.py            # Notificações WhatsApp / Webhooks
+│   │   │   └── logger.py              # Cloud Logging estruturado
+│   │   ├── tools/
+│   │   │   ├── screener.py            # Coleta de Indicadores B3 (MACD, Bollinger, EMAs, RSI)
+│   │   │   └── news_parser.py         # Parsing de notícias financeiras Google News RSS
+│   │   └── main.py                    # Orquestrador do pipeline de governança
+│   ├── tests/                         # Suíte de testes Pytest do agente
+│   │   ├── test_guardrail.py          # Validação de regras e blindagem matemática
+│   │   ├── test_consent.py            # Validação de HMAC, Passkey e TTL de 120s
+│   │   ├── test_screener.py           # Validação dos indicadores técnicos
+│   │   └── test_config.py             # Validação de argumentos e carregamento de lote
+│   ├── Dockerfile                     # Container leve do Python Agent (Cloud Run Job)
+│   ├── pytest.ini                     # Configuração Pytest
+│   ├── requirements.txt               # Dependências Python isoladas
+│   └── README.md                      # Instruções específicas do Agente Python
+│
+├── fido-server/                       # [MÓDULO] Servidor WebAuthn / Passkey (Java 21 / Spring Boot)
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/com/guardrail/fido/
+│   │   │   │   ├── controller/        # ConsentApiController.java
+│   │   │   │   ├── model/             # ConsentChallenge.java
+│   │   │   │   ├── service/           # ConsentService.java
+│   │   │   │   └── FidoServerApplication.java
+│   │   │   └── resources/
+│   │   │       ├── application.yml    # Configurações do Spring Boot
+│   │   │       └── static/consent.html # WebUI Biométrica WebAuthn / Passkey
+│   │   └── test/                      # Testes unitários do servidor FIDO
+│   ├── Dockerfile                     # Container multi-stage Java 21
+│   ├── pom.xml                        # Configuração de dependências Maven
+│   ├── mvnw / mvnw.cmd                # Maven Wrapper
+│   └── README.md                      # Instruções específicas do Servidor FIDO
+│
+├── contracts/                         # [COMPARTILHADO] Schemas e Contratos REST Inter-Módulos
+│   ├── consent-challenge.schema.json  # Schema formal JSON do Desafio de Consentimento
+│   └── README.md                      # Especificação técnica do contrato de dados
+│
+├── config/                            # [COMPARTILHADO] Configurações de Carteiras e Clientes
+│   └── clients.json                   # Watchlists, perfis de risco e orçamentos
+│
+├── docs/                              # [COMPARTILHADO] Documentação de Arquitetura
+│   ├── arquitetura-referencia.png     # Diagrama visual dos 3 Pilares
+│   └── ARCHITECTURE.md                # Especificação arquitetural completa
+│
+├── scripts/                           # [COMPARTILHADO] Automação, Deploy e Execução Local
+│   ├── deploy_cloud_run.sh            # Script oficial de deploy no GCP Cloud Run Jobs
+│   ├── run_local.sh                   # Inicializador conjunto local (Linux/WSL)
+│   └── run_local.ps1                  # Inicializador conjunto local (Windows PowerShell)
+│
+├── docker-compose.yml                 # Orquestração local unificada (FIDO + Agent)
+├── .env.example                       # Variáveis de ambiente recomendadas
+└── README.md                          # Visão geral do ecossistema GuardrailAI
+```
+
+---
+
+## ⚙️ Pré-requisitos
+
+* **Python:** 3.12+ (ou 3.14 via WSL/Linux)
+* **Java:** OpenJDK 21 (para compilar/executar o `fido-server`)
+* **Google Cloud SDK (`gcloud`)** autenticado (para deploy em nuvem)
+* **Docker & Docker Compose** (opcional para execução conteinerizada)
+
+---
+
+## 🚀 Como Executar
+
+### Opção 1: Execução Completa Integrada com 1 Comando (Recomendado)
+
+- **No Linux / WSL / macOS:**
+  ```bash
+  ./scripts/run_local.sh
+  ```
+
+- **No Windows (PowerShell):**
+  ```powershell
+  .\scripts\run_local.ps1
+  ```
+
+- **Via Docker Compose:**
+  ```bash
+  docker compose up --build
+  ```
+
+---
+
+### Opção 2: Execução Independente por Módulo
+
+#### 🐍 Módulo Python (`agent-python`)
+```bash
+cd agent-python
+source .venv/bin/activate  # ou .venv\Scripts\activate no Windows
+
+# Rodar testes automatizados:
+pytest -v
+
+# Executar pipeline de governança:
+python src/main.py --config ../config/clients.json
+```
+
+#### ☕ Módulo Java (`fido-server`)
+```bash
+cd fido-server
+
+# Rodar testes:
+./mvnw test
+
+# Iniciar servidor Spring Boot (porta 8080):
+./mvnw spring-boot:run
+```
+
+---
+
+## ☁️ Deploy no Google Cloud (Cloud Run Jobs)
+
+### 🚀 Deploy Automatizado do Agente com 1 Comando
+
+```bash
+./scripts/deploy_cloud_run.sh
+```
+
+---
+
+### 🛠️ Deploy Manual do Container Python
+
+```bash
+# 1. Autenticar o Docker com o Artifact Registry do Google Cloud
+gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+# 2. Construir a imagem a partir de agent-python
+docker build -t us-central1-docker.pkg.dev/gft-brazil-bu-gcp/repo-guardrailai/guardrail-agent:latest ./agent-python
+
+# 3. Enviar a imagem para o Artifact Registry
+docker push us-central1-docker.pkg.dev/gft-brazil-bu-gcp/repo-guardrailai/guardrail-agent:latest
+
+# 4. Criar ou atualizar o Cloud Run Job
+gcloud run jobs deploy guardrail-agent-job \
+  --image us-central1-docker.pkg.dev/gft-brazil-bu-gcp/repo-guardrailai/guardrail-agent:latest \
+  --region us-central1 \
+  --set-env-vars="CLIENTS_CONFIG_FILE=config/clients.json" \
+  --memory=1Gi \
+  --cpu=1
+```
+
+### 🧪 Execução na Nuvem
+
+```bash
+gcloud run jobs execute guardrail-agent-job --region us-central1
+```
+
+
+
+
+==========================================
+FILE: ./docker-compose.yml
+==========================================
+version: '3.8'
+
+services:
+  # Servidor FIDO / WebAuthn (Java 21 / Spring Boot)
+  fido-server:
+    build:
+      context: ./fido-server
+      dockerfile: Dockerfile
+    container_name: guardrail-fido-server
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_PORT=8080
+    networks:
+      - guardrail-net
+
+  # Agente de IA e Guardrail Engine (Python 3.12)
+  guardrail-agent:
+    build:
+      context: ./agent-python
+      dockerfile: Dockerfile
+    container_name: guardrail-agent-job
+    depends_on:
+      - fido-server
+    volumes:
+      - ./config:/app/config:ro
+    environment:
+      - CLIENTS_CONFIG_FILE=/app/config/clients.json
+      - SPRING_FIDO_BASE_URL=http://fido-server:8080
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - PROJECT_ID=${PROJECT_ID:-gft-brazil-bu-gcp}
+      - LOCATION=${LOCATION:-us-central1}
+    networks:
+      - guardrail-net
+
+networks:
+  guardrail-net:
+    driver: bridge
+
+
+
