@@ -1,95 +1,197 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GuardrailAI - Autorização Biométrica</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
+    <title>GuardrailAI - Autorização Biométrica (FIDO2)</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-        body { background-color: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
-        .card { background-color: #1e293b; border-radius: 16px; padding: 28px; max-width: 440px; width: 100%; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5); border: 1px solid #334155; position: relative; }
-        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-        .badge { background-color: #0284c7; color: #ffffff; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-        .timer { color: #f59e0b; font-size: 13px; font-weight: 600; background: rgba(245, 158, 11, 0.1); padding: 4px 10px; border-radius: 8px; border: 1px solid rgba(245, 158, 11, 0.2); }
-        .title-group { margin-bottom: 20px; }
-        .title-group h2 { font-size: 22px; font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 8px; }
-        .title-group p { color: #94a3b8; font-size: 13px; margin-top: 4px; }
-        .order-box { background: #0f172a; border-radius: 12px; padding: 18px; margin: 18px 0; border: 1px solid #334155; border-left: 4px solid #38bdf8; min-height: 80px; font-size: 14px; }
-        .row { display: flex; justify-content: space-between; margin: 8px 0; font-size: 13px; }
-        .row span { color: #94a3b8; }
-        .row strong { color: #f8fafc; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-        .btn { width: 100%; padding: 14px; border-radius: 10px; border: none; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s ease-in-out; display: flex; align-items: center; justify-content: center; gap: 8px; }
-        .btn-approve { background-color: #22c55e; color: #052e16; margin-top: 12px; }
-        .btn-approve:hover:not(:disabled) { background-color: #16a34a; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3); transform: translateY(-1px); }
-        .btn-approve:disabled { background-color: #334155; color: #64748b; cursor: not-allowed; transform: none; box-shadow: none; }
-        .status-msg { text-align: center; margin-top: 16px; font-weight: 600; font-size: 13px; min-height: 20px; line-height: 1.4; }
-        .footer-note { margin-top: 20px; text-align: center; font-size: 11px; color: #64748b; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .card {
+            background-color: #1e293b;
+            border-radius: 16px;
+            padding: 28px;
+            max-width: 440px;
+            width: 100%;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+            border: 1px solid #334155;
+        }
+
+        .header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .badge {
+            background-color: #0284c7;
+            color: #ffffff;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .timer {
+            color: #f59e0b;
+            font-size: 13px;
+            font-weight: 600;
+            background: rgba(245, 158, 11, 0.1);
+            padding: 4px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .title-group {
+            margin-bottom: 18px;
+        }
+
+        .title-group h2 {
+            font-size: 22px;
+            font-weight: 700;
+            color: #f8fafc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .title-group p {
+            color: #94a3b8;
+            font-size: 13px;
+            margin-top: 4px;
+        }
+
+        .order-box {
+            background: #0f172a;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 16px 0;
+            border: 1px solid #334155;
+            border-left: 4px solid #38bdf8;
+            min-height: 80px;
+            font-size: 14px;
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            font-size: 13px;
+        }
+
+        .row span {
+            color: #94a3b8;
+        }
+
+        .row strong {
+            color: #f8fafc;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: 10px;
+            border: none;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-approve {
+            background-color: #22c55e;
+            color: #052e16;
+            margin-top: 12px;
+        }
+
+        .btn-approve:hover:not(:disabled) {
+            background-color: #16a34a;
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .btn-approve:disabled {
+            background-color: #334155;
+            color: #64748b;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .status-msg {
+            text-align: center;
+            margin-top: 16px;
+            font-weight: 600;
+            font-size: 13px;
+            min-height: 20px;
+            line-height: 1.4;
+        }
+
+        .footer-note {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 11px;
+            color: #64748b;
+        }
     </style>
 </head>
+
 <body>
-<div class="card">
-    <div class="header-bar">
-        <span class="badge">CVM Compliance</span>
-        <div id="timer" class="timer">TTL: 120s</div>
-    </div>
-    <div class="title-group">
-        <h2>🛡️ GuardrailAI</h2>
-        <p>Autorização de Ordem com Não-Repúdio (FIDO2)</p>
-    </div>
-    <div class="order-box" id="orderSummary">
-        <div id="order-details">
-            <div id="orderParams">
-                <span style="color: #94a3b8; font-style: italic;">Carregando parâmetros da ordem...</span>
-            </div>
+    <div class="card">
+        <div class="header-bar">
+            <span class="badge">CVM Compliance</span>
+            <div id="timer" class="timer">TTL: 120s</div>
+        </div>
+
+        <div class="title-group">
+            <h2>🛡️ GuardrailAI</h2>
+            <p>Autorização de Ordem com Não-Repúdio (FIDO2 / WebAuthn)</p>
+        </div>
+
+        <div class="order-box" id="orderSummary">
+            <span style="color: #94a3b8; font-style: italic;">Carregando parâmetros da ordem...</span>
+        </div>
+
+        <button class="btn btn-approve" id="authBtn" disabled>
+            🔒 Assinar com FaceID / Biometria
+        </button>
+
+        <div id="statusMsg" class="status-msg"></div>
+
+        <div class="footer-note">
+            Auditado deterministicamente contra alucinações matemáticas (Q = ⌊B/P⌋).
         </div>
     </div>
-    <button class="btn btn-approve" id="authBtn" disabled>
-        🔒 Assinar com FaceID / Biometria
-    </button>
-    <button id="signBtn" style="display: none;" disabled></button>
-    <div id="statusMsg" class="status-msg"></div>
-    <div class="footer-note">
-        Auditado deterministicamente contra alucinações matemáticas (Q = ⌊B/P⌋).
-    </div>
-</div>
-<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-messaging-compat.js"></script>
-<script>
-    const originalGetById = document.getElementById.bind(document);
-    document.getElementById = function(id) {
-        if (id === 'signBtn') {
-            return originalGetById('authBtn') || originalGetById('signBtn');
-        }
-        return originalGetById(id);
-    };
-</script>
-<script src="/consent.js" defer></script>
-<script>
-    document.addEventListener("DOMContentLoaded", () => {
-        let timeLeft = 120;
-        const timerElem = document.getElementById("timer");
-        const authBtn = document.getElementById("authBtn");
-        const statusMsg = document.getElementById("statusMsg");
-        const interval = setInterval(() => {
-            timeLeft--;
-            if (timerElem) timerElem.textContent = `TTL: ${timeLeft}s`;
-            if (timeLeft <= 0) {
-                clearInterval(interval);
-                if (timerElem) {
-                    timerElem.textContent = "EXPIRADO";
-                    timerElem.style.color = "#ef4444";
-                    timerElem.style.borderColor = "rgba(239, 68, 68, 0.3)";
-                    timerElem.style.background = "rgba(239, 68, 68, 0.1)";
-                }
-                if (authBtn && !authBtn.innerText.includes("Concluída")) authBtn.disabled = true;
-                if (statusMsg && !statusMsg.innerText.includes("sucesso")) {
-                    statusMsg.style.color = "#ef4444";
-                    statusMsg.innerText = "⚠️ Desafio expirado após 120s. Gere uma nova ordem.";
-                }
-            }
-        }, 1000);
-    });
-</script>
+
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-messaging-compat.js"></script>
+    <script src="/consent.js" defer></script>
 </body>
+
 </html>

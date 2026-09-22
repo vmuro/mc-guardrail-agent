@@ -115,11 +115,26 @@ def validate_single_order(
                 reason=f"Ordem de VENDA rejeitada para {order.ticker}: quantidade deve ser maior que zero.",
                 applied_risk_profile=risk_profile
             )
+
+        # Preenche o preço real de mercado para exibição informativa
+        price_to_use = real_market_price if real_market_price and real_market_price > 0 else order.unit_price
+        sell_order = OrderItem(
+            ticker=order.ticker,
+            action="SELL",
+            quantity=order.quantity,
+            unit_price=price_to_use,
+            stop_loss_price=0.0,
+            rationale=order.rationale
+        )
+
+        estimated_total = round(order.quantity * price_to_use, 2)
+        total_str = f" (Estimativa: R$ {estimated_total:,.2f})" if price_to_use > 0 else ""
+
         return OrderAudit(
-            order=order,
+            order=sell_order,
             is_valid=True,
             status="APPROVED",
-            reason=f"Ordem de VENDA de {order.quantity} ações de {order.ticker} aprovada para realização/proteção.",
+            reason=f"Ordem de VENDA de {order.quantity} ações de {order.ticker} aprovada para realização/proteção{total_str}.",
             applied_risk_profile=risk_profile
         )
 

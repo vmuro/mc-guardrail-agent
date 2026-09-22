@@ -58,17 +58,20 @@ class ConsentChallenge(BaseModel):
 
 
 def generate_canonical_payload(order_dict: Dict[str, Any], nonce: str, created_at: float) -> str:
+    """Gera a representação canônica ordenada incluindo o rationale analítico."""
     canonical_data = {
         "action": order_dict.get("action"),
         "created_at": created_at,
         "nonce": nonce,
         "quantity": order_dict.get("quantity"),
-        "stop_loss_price": order_dict.get("stop_loss_price"),
+        "rationale": order_dict.get("rationale", ""), 
+        "stop_loss_price": order_dict.get("stop_loss_price", 0.0),
         "ticker": order_dict.get("ticker"),
         "total_cost": order_dict.get("total_cost", order_dict.get("total_amount", 0.0)),
         "unit_price": order_dict.get("unit_price", order_dict.get("estimated_price", 0.0))
     }
     return json.dumps(canonical_data, sort_keys=True, separators=(',', ':'))
+
 
 
 def create_consent_challenge(

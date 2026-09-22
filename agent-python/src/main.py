@@ -29,7 +29,7 @@ def load_job_configuration() -> List[Dict[str, Any]]:
     """
     Carrega a configuração dos clientes para a execução do Job no Cloud Run.
     Ordem de precedência:
-    1. Se --config (-f) foi explicitamente informado na CLI ou CLIENTS_CONFIG_FILE em os.environ, carrega o arquivo.
+    1. Se --config (-f) foi explicitamente informado na CLI ou CLIENTS_CONFIG_FILE em os.environ.
     2. Se --client-id, --budget, etc. foram passados na CLI, constrói cliente individual.
     3. Se existir config/clients.json ou clients.json, carrega o lote.
     4. Caso contrário, retorna cliente padrão de fallback.
@@ -37,7 +37,6 @@ def load_job_configuration() -> List[Dict[str, Any]]:
     parser = argparse.ArgumentParser(
         description="GuardrailAI: Middleware B2B de Governança para Mercado de Capitais (B3)"
     )
-
     parser.add_argument(
         "--config", "-f",
         type=str,
@@ -69,11 +68,12 @@ def load_job_configuration() -> List[Dict[str, Any]]:
         default=os.getenv("WATCHLIST", "PETR4.SA,VALE3.SA,ITUB4.SA,BBDC4.SA"),
         help="Lista de tickers separados por vírgula"
     )
-
     args, unknown = parser.parse_known_args()
 
     config_specified_in_cli = any(arg in sys.argv for arg in ["--config", "-f"])
-    cli_single_specified = any(arg in sys.argv for arg in ["--client-id", "-c", "--budget", "-b", "--risk-profile", "-r", "--watchlist", "-w"])
+    cli_single_specified = any(
+        arg in sys.argv for arg in ["--client-id", "-c", "--budget", "-b", "--risk-profile", "-r", "--watchlist", "-w"]
+    )
 
     if config_specified_in_cli or (args.config and not cli_single_specified):
         candidate_paths = [
@@ -92,6 +92,7 @@ def load_job_configuration() -> List[Dict[str, Any]]:
         return [
             {
                 "client_id": args.client_id,
+                "name": f"Investidor {args.client_id}",
                 "segment": "Investidor Individual",
                 "budget": args.budget,
                 "risk_profile": args.risk_profile,
@@ -116,6 +117,7 @@ def load_job_configuration() -> List[Dict[str, Any]]:
     return [
         {
             "client_id": args.client_id,
+            "name": f"Investidor {args.client_id}",
             "segment": "Investidor Individual",
             "budget": args.budget,
             "risk_profile": args.risk_profile,
@@ -129,7 +131,6 @@ def collect_market_data(unique_tickers: List[str]) -> Dict[str, Any]:
     Coleta dados de mercado e notícias uma única vez para todos os tickers.
     """
     market_snapshot_by_ticker = {}
-
     for ticker in unique_tickers:
         print(f"  -> Coletando indicadores técnicos e notícias para: {ticker}...")
         try:
@@ -140,7 +141,6 @@ def collect_market_data(unique_tickers: List[str]) -> Dict[str, Any]:
                 market_snapshot_by_ticker[ticker] = tech
         except Exception as e:
             print(f"⚠️ Erro ao coletar {ticker}: {e}")
-
     return market_snapshot_by_ticker
 
 
@@ -153,7 +153,12 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
     segment = client_config.get("segment", "Varejo")
     budget = float(client_config.get("budget", client_config.get("allocated_budget", 5000.0)))
     risk_profile = client_config.get("risk_profile", "MODERATE")
-    watchlist = client_config.get("watchlist", client_config.get("target_assets", ["PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBDC4.SA"]))
+
+    raw_watchlist = client_config.get("watchlist") or client_config.get("target_assets") or ["PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBDC4.SA"]
+    if isinstance(raw_watchlist, str):
+        watchlist = [t.strip().upper() for t in raw_watchlist.split(",") if t.strip()]
+    else:
+        watchlist = [str(t).strip().upper() for t in raw_watchlist if str(t).strip()]
 
     print("\n" + "=" * 75)
     print(f"👤 PROCESSANDO INVESTIDOR: {client_name} ({segment}) [ID: {client_id}]")
@@ -169,7 +174,7 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
         return
 
     # 1. Tomada de Decisão com Gemini
-    print(f"\n🧠 [1/3] Consultando Gemini (Vertex AI) para tese de portfólio...")
+    print("\n🧠 [1/3] Consultando Gemini (Vertex AI) para tese de portfólio...")
     raw_decision = analyze_market_with_gemini(
         client_snapshot,
         user_budget=budget,
@@ -187,12 +192,12 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
     )
 
     # 3. Consentimento Regulatório e Notificação Push (FCM)
-    print(f"🔐 [3/3] Gerando Consentimento Regulatório e Disparando Push FCM...")
+    print("🔐 [3/3] Gerando Consentimento Regulatório e Disparando Notificações...")
     consent_records = []
-
     for audit_item in audit.approved_orders:
         order = audit_item.order
         if order.action in ["BUY", "SELL"] and order.quantity > 0:
+            portfolio_rationale = raw_decision.get("portfolio_rationale", "") if isinstance(raw_decision, dict) else ""
             order_payload = {
                 "ticker": order.ticker,
                 "action": order.action,
@@ -200,6 +205,7 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
                 "unit_price": order.unit_price,
                 "total_cost": order.total_cost,
                 "stop_loss_price": order.stop_loss_price,
+                "rationale": order.rationale or portfolio_rationale or "Tese fundamentada com base em análise técnica e governança determinística.",
                 "client_name": client_name
             }
 
@@ -223,7 +229,6 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
                 ttl_seconds=120
             )
             challenge.consent_id = challenge_id
-
             authorized = authorize_biometric_passkey(
                 challenge,
                 auth_method="PASSKEY_FIDO2_BIOMETRIC"
@@ -271,7 +276,7 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
             print(f"     Status: {item.status} | {item.reason}")
 
     if consent_records:
-        print(f"\n🔐 NÃO-REPÚDIO & CVM COMPLIANCE:")
+        print("\n🔐 NÃO-REPÚDIO & CVM COMPLIANCE:")
         for c in consent_records:
             cid = c.get("consent_id", c.get("challenge_id", "n/a")) if isinstance(c, dict) else getattr(c, "consent_id", "n/a")
             status = c.get("status", "PENDING_BIOMETRIC") if isinstance(c, dict) else getattr(c, "status", "PENDING_BIOMETRIC")
@@ -294,14 +299,22 @@ def run_pipeline():
     clients = load_job_configuration()
     print(f"📋 Total de Clientes / Carteiras para Processamento: {len(clients)}")
 
-    all_tickers = sorted(list(set(
-        ticker for c in clients for ticker in c.get("watchlist", c.get("target_assets", ["PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBDC4.SA"]))
-    )))
+    all_tickers_set = set()
+    for c in clients:
+        raw_list = c.get("watchlist") or c.get("target_assets") or ["PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBDC4.SA"]
+        if isinstance(raw_list, list):
+            for t in raw_list:
+                all_tickers_set.add(str(t).strip().upper())
+        elif isinstance(raw_list, str):
+            for t in raw_list.split(","):
+                if t.strip():
+                    all_tickers_set.add(t.strip().upper())
+
+    all_tickers = sorted(list(all_tickers_set))
     print(f"🌐 Universo de Ativos B3 Monitorados: {', '.join(all_tickers)}")
 
     print("\n📊 PILAR 1 - Coleta Consolidada de Indicadores Técnicos e Notícias...")
     market_data = collect_market_data(all_tickers)
-
     if not market_data:
         print("❌ Erro fatal: Falha ao obter dados de mercado para os ativos monitorados.")
         return
