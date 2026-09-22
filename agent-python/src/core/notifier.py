@@ -21,14 +21,38 @@ def send_push_notification(client_name: str, order: dict, consent_url: str) -> b
         return True
 
     try:
-        # Monta a mensagem
+        ticker = order.get("ticker", "ORDEM")
+        action = order.get("action", "BUY")
+        total_cost = order.get("total_cost", 0.0)
+        tag = f"guardrail-{ticker}-{action}"
+
+        # WebpushConfig: link só é permitido pelo SDK Firebase se for HTTPS (ex: ngrok ou prod).
+        # Para http://localhost, a URL é transmitida no payload 'data' e tratada pelo Service Worker.
+        fcm_options = messaging.WebpushFCMOptions(link=consent_url) if consent_url.startswith("https://") else None
+        webpush_config = messaging.WebpushConfig(
+            notification=messaging.WebpushNotification(
+                tag=tag
+            ),
+            fcm_options=fcm_options
+        ) if fcm_options else messaging.WebpushConfig(
+            notification=messaging.WebpushNotification(
+                tag=tag
+            )
+        )
+
+        # Monta a mensagem com WebpushConfig e tag para impedir duplicidade no navegador
         message = messaging.Message(
             notification=messaging.Notification(
                 title="🚨 GuardrailAI - Autorização de Ordem",
-                body=f"Nova ordem de {order.get('action')} para {order.get('ticker')} (R$ {order.get('total_cost', 0.0):.2f})",
+                body=f"Nova ordem de {action} para {ticker} (R$ {total_cost:.2f})",
             ),
-            # Adiciona o campo 'data' com a URL para o Service Worker
-            data={"consentUrl": consent_url},
+            data={
+                "consentUrl": consent_url,
+                "ticker": str(ticker),
+                "action": str(action),
+                "total_cost": str(total_cost)
+            },
+            webpush=webpush_config,
             token=TARGET_DEVICE_TOKEN,
         )
         response = messaging.send(message)

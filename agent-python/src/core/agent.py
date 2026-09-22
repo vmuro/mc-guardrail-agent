@@ -9,26 +9,37 @@ MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash")
 
 if "GOOGLE_CLOUD_PROJECT" not in os.environ:
     os.environ["GOOGLE_CLOUD_PROJECT"] = PROJECT_ID
+
 if "GOOGLE_CLOUD_LOCATION" not in os.environ:
     os.environ["GOOGLE_CLOUD_LOCATION"] = LOCATION
 
 SYSTEM_INSTRUCTION = """
-Você é o módulo de análise cognitiva do GuardrailAI, um middleware B2B de governança de investimentos focado no mercado de capitais brasileiro (B3).
-Sua missão é analisar o snapshot consolidado de mercado (preço real, RSI_14, Médias EMA9/EMA21/SMA20/SMA200, MACD, Bandas de Bollinger e Notícias recentes) para cada ativo da watchlist e formular a tese de alocação de mercado.
+Você é o módulo de análise cognitiva e governança algorítmica do GuardrailAI (B3).
+Sua missão é classificar deterministicamente os ativos da watchlist aplicando a seguinte ÁRVORE DE DECISÃO TÉCNICA ESTATÍSTICA:
 
-Responsabilidades do Analista de IA:
-1. **Identificação de Oportunidades Técnicas e Fundamentais**:
-   - Tendência de alta: EMA 9 > EMA 21 e preço acima da SMA 200.
-   - Sinais de exaustão/sobrecompra: RSI > 70 ou toque na Banda Superior de Bollinger (sugira HOLD ou SELL).
-   - Sinais de reversão/recuperação: RSI < 35 com inflexão do MACD histograma (macd_diff > 0).
-2. **Definição de Ações e Estratégia de Risco**:
-   - Para cada ativo da watchlist, defina uma ação ("BUY", "HOLD" ou "SELL").
-   - Para ordens "BUY", sugira o preço de entrada de referência (`unit_price`) e obrigatoriamente um preço de stop loss de segurança (`stop_loss_price`) posicionado abaixo de suportes técnicos.
-   - A quantidade exata de ações será recalculada deterministicamente pelo motor de governança para blindar contra erros de cálculo.
-3. **Formato Exclusivo de Resposta**:
-   - Responda SEMPRE E EXCLUSIVAMENTE em formato JSON estruturado válido.
+1. REGRAS DE CLASSIFICAÇÃO DE AÇÃO (ESTRITAS):
+   - AÇÃO "BUY":
+     * Critério obrigatório: (EMA_9 > EMA_21) E (preço > SMA_200) E (RSI_14 entre 35.0 e 70.0).
+     * Preço de Entrada (unit_price): exatamente o `current_price` do snapshot.
+     * Preço de Stop Loss (stop_loss_price):
+       - CONSERVATIVE: exatamente min(EMA_21, SMA_20) ou (current_price * 0.95), respeitando queda máx de 8%.
+       - MODERATE: (current_price * 0.90), respeitando queda máx de 12%.
+       - AGGRESSIVE: (current_price * 0.86), respeitando queda máx de 15%.
+   - AÇÃO "SELL":
+     * Critério obrigatório: Ativo em posse com quebra estrutural severa OU toque na Banda Superior com RSI > 75.
+     * unit_price: exatamente o `current_price`.
+     * stop_loss_price: 0.0.
+   - AÇÃO "HOLD":
+     * Critério obrigatório: Ativo com (EMA_9 < EMA_21), ou (preço < SMA_200), ou MACD negativo (macd_diff < 0) sem reversão confirmada.
+     * Para ativos em tendência de baixa sem compra autorizada, a recomendação padrão de segurança é SEMPRE "HOLD" (não alocar capital).
+     * unit_price: 0.0, stop_loss_price: 0.0, quantity: 0.
 
-Esquema JSON esperado:
+2. QUANTIDADE:
+   - Defina sempre `quantity: 100` como base para BUY. A quantidade final será recalculada matematicamente pelo Guardrail Engine (Q = ⌊B/P⌋).
+
+3. FORMATO EXCLUSIVO DE SAÍDA:
+   - Responda SEMPRE E EXCLUSIVAMENTE em formato JSON com o seguinte esquema:
+
 {
   "portfolio_rationale": "Resumo macro da tese e oportunidades identificadas no mercado.",
   "allocations": [
@@ -38,7 +49,7 @@ Esquema JSON esperado:
       "quantity": 100,
       "unit_price": 0.0,
       "stop_loss_price": 0.0,
-      "rationale": "Tese fundamentada com base em técnica e notícias."
+      "rationale": "Tese técnica objetiva citando valores exatos de EMA9, EMA21, SMA200, RSI e MACD."
     }
   ]
 }
@@ -60,25 +71,28 @@ def analyze_market_with_gemini(
     risk_profile: str = "MODERATE"
 ) -> dict:
     """
-    Envia o snapshot completo de mercado e parâmetros do investidor para o Gemini 2.5 Flash
-    estruturar a proposta de análise e teses de investimento.
+    Envia o snapshot completo de mercado e parâmetros do investidor com
+    temperatura 0.0 para garantir consistência e reprodutibilidade total.
     """
     client = get_client()
 
     prompt = f"""
-Snapshot Consolidado de Mercado (Indicadores Técnicos + Notícias):
+Snapshot Consolidado de Mercado:
 {json.dumps(market_snapshot, indent=2, ensure_ascii=False)}
 
 Parâmetros do Investidor:
-- Orçamento Total Disponível: R$ {user_budget:.2f}
+- Orçamento Disponível: R$ {user_budget:.2f}
 - Perfil de Risco Declarado: {risk_profile}
 
-Analise todos os ativos da watchlist e formule a proposta no esquema JSON especificado.
+Aplique a árvore de decisão matemática e retorne as alocações no formato JSON.
 """
 
+    # Configuração calibrada para zero alucinação e máxima repetibilidade
     config = types.GenerateContentConfig(
         system_instruction=SYSTEM_INSTRUCTION,
-        temperature=0.2,
+        temperature=0.0,       # Decodificação Greedy determinística
+        top_p=0.1,             # Restrição máxima de amostragem
+        top_k=1,               # Seleciona sempre o token mais provável
         response_mime_type="application/json"
     )
 
@@ -105,28 +119,3 @@ Analise todos os ativos da watchlist e formule a proposta no esquema JSON especi
                 for item in market_snapshot
             ]
         }
-
-
-if __name__ == "__main__":
-    mock_data = [
-        {
-            "ticker": "PETR4.SA",
-            "current_price": 38.50,
-            "rsi_14": 32.5,
-            "ema_9": 38.20,
-            "ema_21": 38.80,
-            "sma_20": 39.10,
-            "sma_200": 36.50,
-            "macd": -0.45,
-            "macd_signal": -0.50,
-            "macd_diff": 0.05,
-            "bollinger_high": 40.50,
-            "bollinger_low": 37.80,
-            "bollinger_pband": 0.25,
-            "recent_news": ["Petrobras aprova novos dividendos."]
-        }
-    ]
-
-    print(f"🤖 Consultando Gemini 2.5 Flash no GuardrailAI...")
-    resultado = analyze_market_with_gemini(mock_data, user_budget=5000.0, risk_profile="MODERATE")
-    print(json.dumps(resultado, indent=2, ensure_ascii=False))

@@ -54,10 +54,9 @@ if (typeof firebase !== 'undefined') {
     }
 
     messaging.onMessage((payload) => {
-        console.log('📩 Notificação em primeiro plano:', payload);
-        const title = payload.notification ? payload.notification.title : "GuardrailAI";
-        const body = payload.notification ? payload.notification.body : "Nova recomendação disponível.";
-        new Notification(title, { body: body });
+        console.log('📩 Mensagem FCM recebida:', payload);
+        // Não chamamos `new Notification` aqui para evitar duplicar
+        // com a notificação do sistema operacional já disparada pelo FCM.
     });
 }
 
