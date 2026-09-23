@@ -21,14 +21,16 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log("[SW] Push recebido em segundo plano:", payload);
 
-  const notificationTitle = payload.notification?.title || payload.data?.title || "🚨 GuardrailAI - Autorização de Ordem";
-  const notificationBody = payload.notification?.body || payload.data?.body || "Nova recomendação disponível para autorização.";
+  // No padrão Data-Only, payload.data contém todas as informações da ordem
+  const notificationTitle = payload.data?.title || payload.notification?.title || "🚨 GuardrailAI - Autorização de Ordem";
+  const notificationBody = payload.data?.body || payload.notification?.body || "Nova recomendação disponível para autorização.";
   const consentUrl = payload.data?.consentUrl || payload.data?.url;
+  const notificationTag = payload.data?.tag || ('guardrail-order-' + (payload.data?.challengeId || payload.data?.ticker || 'single'));
 
   const notificationOptions = {
     body: notificationBody,
     icon: 'https://www.gstatic.com/mobilesdk/160503_mobilesdk/logo/2x/firebase_28.png',
-    tag: 'guardrail-order-' + (payload.data?.ticker || 'single'),
+    tag: notificationTag,
     renotify: false,
     data: { url: consentUrl },
   };

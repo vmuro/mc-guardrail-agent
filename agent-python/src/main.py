@@ -103,6 +103,7 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
 
     print(f"🔐 [3/3] Gerando Consentimento Regulatório e Disparando Notificações...")
     consent_records = []
+    processed_challenges = set()
     for audit_item in audit.approved_orders:
         order = audit_item.order
         if order.action in ["BUY", "SELL"] and order.quantity > 0:
@@ -118,8 +119,16 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
             challenge_id = fido_res.get("challengeId", "challenge_simulated")
             consent_url = f"{FIDO_BASE_URL}/consent.html?challengeId={challenge_id}"
             
-            print(f"📲 Disparando Notificação Push (FCM) para autorização...")
-            send_push_notification(client_name=client_name, order=order_payload, consent_url=consent_url)
+            # Idempotência: Garante estritamente 1 notificação por ordem/desafio
+            if challenge_id not in processed_challenges:
+                print(f"📲 Disparando Notificação Push (FCM Data-Only) para autorização [{challenge_id}]...")
+                send_push_notification(
+                    client_name=client_name,
+                    order=order_payload,
+                    consent_url=consent_url,
+                    challenge_id=challenge_id
+                )
+                processed_challenges.add(challenge_id)
             
             # Adiciona o registro do desafio para o log final
             consent_records.append(fido_res)
