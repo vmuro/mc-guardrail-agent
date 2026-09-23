@@ -32,16 +32,28 @@ for i in {1..30}; do
 done
 
 # 2. Executar Agente Python
-echo -e "\n🐍 ${YELLOW}[2/2] Executando Agente de Governança Python...${NC}"
+MODE="${1:-server}"
+echo -e "\n🐍 ${YELLOW}[2/2] Iniciando Agente de Governança Python (${MODE})...${NC}"
 cd "$(dirname "$0")/../agent-python"
 
 if [ -d ".venv" ]; then
     source .venv/bin/activate
+elif [ -d "venv" ]; then
+    source venv/bin/activate
 elif [ -d "../.venv" ]; then
     source ../.venv/bin/activate
+elif [ -d "../venv" ]; then
+    source ../venv/bin/activate
 fi
 
-python src/main.py --config ../config/clients.json
+if [ "$MODE" = "cli" ]; then
+    python src/main.py --config ../config/clients.json
+    echo -e "\n${GREEN}✅ Execução CLI concluída com sucesso!${NC}"
+    echo -e "💡 Para encerrar o FIDO Server em segundo plano: kill ${FIDO_PID}"
+else
+    echo -e "   -> Servidor de Governança Python ativo na porta 8000."
+    echo -e "   -> ${CYAN}Acesse a interface web de avaliação em:${NC} ${GREEN}http://localhost:8080/evaluate.html${NC}"
+    echo -e "   -> ${CYAN}Tela de consentimento:${NC} ${GREEN}http://localhost:8080/consent.html${NC}"
+    python src/server.py
+fi
 
-echo -e "\n${GREEN}✅ Execução concluída com sucesso!${NC}"
-echo -e "💡 Para encerrar o FIDO Server em segundo plano: kill ${FIDO_PID}"

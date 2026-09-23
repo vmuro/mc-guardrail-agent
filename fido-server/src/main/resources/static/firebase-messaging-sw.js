@@ -44,10 +44,15 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
   const data = event.notification.data || {};
-  const consentUrl = data.url || data.consentUrl;
-  if (consentUrl) {
-    event.waitUntil(clients.openWindow(consentUrl));
+  let targetUrl = data.url || data.consentUrl;
+  if (data.challengeId) {
+    targetUrl = new URL(`/consent.html?challengeId=${data.challengeId}`, self.location.origin).href;
+  }
+
+  if (targetUrl) {
+    event.waitUntil(clients.openWindow(targetUrl));
   } else {
     console.warn("[SW] URL de consentimento não localizada no clique.");
   }
 });
+

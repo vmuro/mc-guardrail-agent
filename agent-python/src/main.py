@@ -9,15 +9,10 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-from src.tools.screener import get_technical_indicators
-from src.tools.news_parser import get_stock_news
-from src.core.agent import analyze_market_with_gemini
-from src.core.guardrail import validate_portfolio_proposal
-from src.core.consent import create_fido_consent_challenge
-from src.core.notifier import send_push_notification
+from src.core.evaluator import evaluate_client_portfolio, collect_market_data_for_tickers
 from src.core.logger import log_event
 
-# URL Base para a tela de consentimento FIDO2 (ngrok ou localhost)
+# URL Base para a tela de consentimento (ngrok ou localhost)
 FIDO_BASE_URL = os.getenv("FIDO_BASE_URL", "http://localhost:8080").rstrip("/")
 
 def load_job_configuration() -> List[Dict[str, Any]]:
@@ -63,17 +58,8 @@ def load_job_configuration() -> List[Dict[str, Any]]:
     }]
 
 def collect_market_data(unique_tickers: List[str]) -> Dict[str, Any]:
-    market_snapshot_by_ticker = {}
-    for ticker in unique_tickers:
-        print(f"  -> Coletando indicadores técnicos e notícias para: {ticker}...")
-        try:
-            tech = get_technical_indicators(ticker, period="1y")
-            if tech:
-                tech["recent_news"] = get_stock_news(ticker, max_items=2) or ["Nenhuma notícia recente relevante."]
-                market_snapshot_by_ticker[ticker] = tech
-        except Exception as e:
-            print(f"⚠️ Erro ao coletar {ticker}: {e}")
-    return market_snapshot_by_ticker
+    return collect_market_data_for_tickers(unique_tickers)
+
 
 def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[str, Any]):
     client_id = client_config.get("client_id", "anonymous_client")
@@ -90,81 +76,43 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
     print(f"   Watchlist: {', '.join(watchlist)}")
     print("=" * 75)
 
-    client_snapshot = [market_data[t] for t in watchlist if t in market_data]
-    if not client_snapshot:
-        print(f"⚠️ Aviso: Não há dados de mercado para a watchlist de {client_id}.")
-        return
-
-    print("\n🧠 [1/3] Consultando Gemini (Vertex AI) para tese de portfólio...")
-    raw_decision = analyze_market_with_gemini(client_snapshot, budget, risk_profile)
-
-    print(f"🛡️ [2/3] Interceptando com Guardrail Engine...")
-    audit = validate_portfolio_proposal(raw_decision, budget, risk_profile, {t: market_data[t].get("current_price") for t in market_data})
-
-    print(f"🔐 [3/3] Gerando Consentimento Regulatório e Disparando Notificações...")
-    consent_records = []
-    processed_challenges = set()
-    for audit_item in audit.approved_orders:
-        order = audit_item.order
-        if order.action in ["BUY", "SELL"] and order.quantity > 0:
-            order_payload = {
-                "ticker": order.ticker, "action": order.action, "quantity": order.quantity,
-                "unit_price": order.unit_price, "total_cost": order.total_cost,
-                "stop_loss_price": order.stop_loss_price, "rationale": order.rationale,
-                "client_name": client_name
-            }
-            
-            # Ponto único de criação e envio
-            fido_res = create_fido_consent_challenge(client_config, order_payload)
-            challenge_id = fido_res.get("challengeId", "challenge_simulated")
-            consent_url = f"{FIDO_BASE_URL}/consent.html?challengeId={challenge_id}"
-            
-            # Idempotência: Garante estritamente 1 notificação por ordem/desafio
-            if challenge_id not in processed_challenges:
-                print(f"📲 Disparando Notificação Push (FCM Data-Only) para autorização [{challenge_id}]...")
-                send_push_notification(
-                    client_name=client_name,
-                    order=order_payload,
-                    consent_url=consent_url,
-                    challenge_id=challenge_id
-                )
-                processed_challenges.add(challenge_id)
-            
-            # Adiciona o registro do desafio para o log final
-            consent_records.append(fido_res)
-
-    log_event("GUARDRAIL_GOVERNANCE_AUDIT", {
-        "client_id": client_id, "risk_profile": risk_profile, "audit_summary": audit.summary,
-        "approved_orders": [o.model_dump() for o in audit.approved_orders],
-        "rejected_orders": [o.model_dump() for o in audit.rejected_orders],
-        "regulatory_consents": consent_records
-    })
+    res = evaluate_client_portfolio(
+        client_id=client_id,
+        budget=budget,
+        risk_profile=risk_profile,
+        watchlist=watchlist,
+        client_name=client_name,
+        segment=segment,
+        market_data=market_data,
+        fido_base_url=FIDO_BASE_URL,
+        send_notifications=True
+    )
 
     print("\n" + "-" * 75)
     print(f"📊 RESULTADO DE GOVERNANÇA: {client_id}")
-    print(f"   Status: {audit.summary}")
-    print(f"   Capital Alocado: R$ {audit.total_allocated:,.2f} | Saldo: R$ {audit.remaining_budget:,.2f}")
+    print(f"   Status: {res['summary']}")
+    print(f"   Capital Alocado: R$ {res['totalAllocated']:,.2f} | Saldo: R$ {res['remainingBudget']:,.2f}")
     print("-" * 75)
 
-    if audit.approved_orders:
-        print(f"✅ ORDENS APROVADAS ({len(audit.approved_orders)}):")
-        for idx, item in enumerate(audit.approved_orders, 1):
-            ord_data = item.order
-            cost_str = f" | Total: R$ {ord_data.total_cost:,.2f}" if ord_data.action == "BUY" else ""
-            print(f"  {idx}. [{ord_data.ticker}] {ord_data.action} | {ord_data.quantity}x @ R$ {ord_data.unit_price:,.2f}{cost_str}")
-            print(f"     Status: {item.status} | {item.reason}")
+    if res.get("approvedOrders"):
+        print(f"✅ ORDENS APROVADAS ({len(res['approvedOrders'])}):")
+        for idx, item in enumerate(res["approvedOrders"], 1):
+            cost_str = f" | Total: R$ {item['totalCost']:,.2f}" if item["action"] == "BUY" else ""
+            print(f"  {idx}. [{item['ticker']}] {item['action']} | {item['quantity']}x @ R$ {item['unitPrice']:,.2f}{cost_str}")
+            print(f"     Status: {item['status']} | {item['reason']}")
     
-    if consent_records:
+    if res.get("regulatoryConsents"):
         print(f"\n🔐 NÃO-REPÚDIO & CVM COMPLIANCE:")
-        for rec in consent_records:
+        for rec in res["regulatoryConsents"]:
             cid = rec.get("challengeId", "n/a")
             print(f"  - Desafio ID: {cid} | Status: PENDING_BIOMETRIC | TTL: 120s")
-            print(f"    🔗 URL WebAuthn: {FIDO_BASE_URL}/consent.html?challengeId={cid}")
+            print(f"    🔗 URL WebAuthn: {rec.get('consentUrl', f'{FIDO_BASE_URL}/consent.html?challengeId={cid}')}")
 
-    if audit.rejected_orders:
-        print(f"\n🛑 ORDENS REJEITADAS ({len(audit.rejected_orders)}):")
-        for idx, item in enumerate(audit.rejected_orders, 1):
-            print(f"  {idx}. [{item.order.ticker}] {item.order.action} | Motivo: {item.reason}")
+    if res.get("rejectedOrders"):
+        print(f"\n🛑 ORDENS REJEITADAS ({len(res['rejectedOrders'])}):")
+        for idx, item in enumerate(res["rejectedOrders"], 1):
+            print(f"  {idx}. [{item['ticker']}] {item['action']} | Motivo: {item['reason']}")
+
 
 def run_pipeline():
     print("=" * 75)

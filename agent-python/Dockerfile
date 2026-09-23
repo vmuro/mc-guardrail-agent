@@ -23,5 +23,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY src/ /app/src/
 COPY config/ /app/config/
 
-# Ponto de entrada padrão para execução do Job
-CMD ["python", "src/main.py"]
+# Ponto de entrada padrão para o Servidor FastAPI (Cloud Run ou local)
+ENV PORT=8000
+EXPOSE 8000
+CMD ["python", "src/server.py"]

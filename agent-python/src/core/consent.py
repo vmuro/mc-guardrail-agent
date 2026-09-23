@@ -144,11 +144,24 @@ def authorize_biometric_passkey(
     return challenge
 
 
+def get_gcp_id_token(audience: str) -> Optional[str]:
+    """Obtém Identity Token OIDC do GCP Metadata Server para chamadas Service-to-Service."""
+    try:
+        url = f"http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience={audience}"
+        headers = {"Metadata-Flavor": "Google"}
+        resp = requests.get(url, headers=headers, timeout=2)
+        if resp.status_code == 200:
+            return resp.text.strip()
+    except Exception:
+        pass
+    return None
+
+
 def create_fido_consent_challenge(client: Dict[str, Any], order: Dict[str, Any]) -> Dict[str, Any]:
     """
     Exporta explicitamente a função esperada pelo main.py:
     1. Cria o desafio local.
-    2. Registra no Spring Boot FIDO server se ativo.
+    2. Registra no Spring Boot FIDO server se ativo (com suporte a Cloud Run IAM).
     3. Retorna o payload estruturado com challengeId.
     """
     client_id = client.get("client_id", "client_retail_001")
@@ -169,13 +182,22 @@ def create_fido_consent_challenge(client: Dict[str, Any], order: Dict[str, Any])
     }
 
     try:
+        headers = {"Content-Type": "application/json"}
+        if SPRING_FIDO_BASE_URL.startswith("https://"):
+            token = get_gcp_id_token(SPRING_FIDO_BASE_URL)
+            if token:
+                headers["Authorization"] = f"Bearer {token}"
+
         resp = requests.post(
             f"{SPRING_FIDO_BASE_URL}/api/consent/challenges",
             json=challenge_data,
-            timeout=2
+            headers=headers,
+            timeout=3
         )
         if resp.status_code not in [200, 201]:
             logger.warning(f"[CONSENT] Spring FIDO indisponível ({resp.status_code}). Operando em modo local.")
+        else:
+            logger.info(f"[CONSENT] Desafio {challenge.consent_id} registrado com sucesso no Spring FIDO.")
     except Exception as err:
         logger.warning(f"[CONSENT] Falha ao contatar Spring FIDO ({err}). Operando em modo local.")
 
@@ -184,9 +206,15 @@ def create_fido_consent_challenge(client: Dict[str, Any], order: Dict[str, Any])
 
 def poll_for_fido_approval(challenge_id: str, timeout: int = CONSENT_TTL_SECONDS, interval: int = 2) -> Dict[str, Any]:
     start_time = time.time()
+    headers = {}
+    if SPRING_FIDO_BASE_URL.startswith("https://"):
+        token = get_gcp_id_token(SPRING_FIDO_BASE_URL)
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
     while time.time() - start_time < timeout:
         try:
-            resp = requests.get(f"{SPRING_FIDO_BASE_URL}/api/consent/status/{challenge_id}", timeout=2)
+            resp = requests.get(f"{SPRING_FIDO_BASE_URL}/api/consent/status/{challenge_id}", headers=headers, timeout=2)
             if resp.status_code == 200:
                 data = resp.json()
                 if data.get("status") == "APPROVED":
@@ -197,3 +225,4 @@ def poll_for_fido_approval(challenge_id: str, timeout: int = CONSENT_TTL_SECONDS
             pass
         time.sleep(interval)
     return {"approved": False, "reason": "TTL_EXPIRED"}
+
