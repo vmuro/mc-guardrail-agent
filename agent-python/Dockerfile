@@ -1,24 +1,27 @@
-# Imagem base leve do Python
-FROM python:3.12-slim
+# Imagem base oficial do Python
+FROM python:3.11-slim
 
-# Diretório padrão dentro do container
+# Evita geração de bytecode .pyc e força flush imediato de logs no stdout
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH="/app"
+
 WORKDIR /app
 
-# Variáveis de ambiente padrão
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH=/app
+# Instala dependências do sistema necessárias para compilação de pacotes C/C++ se houver
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Instalação das dependências
+# Copia e instala as dependências Python
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Cópia do código-fonte do agente
-COPY ./src ./src
+# Copia o código-fonte e configurações
+COPY src/ /app/src/
+COPY config/ /app/config/
 
-# Garante a existência do diretório de configuração caso seja montado via volume
-RUN mkdir -p /app/config
-
-# Comando de inicialização do pipeline de governança
+# Ponto de entrada padrão para execução do Job
 CMD ["python", "src/main.py"]
-
