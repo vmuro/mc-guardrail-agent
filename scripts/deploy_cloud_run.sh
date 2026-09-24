@@ -11,7 +11,8 @@ REPO_NAME="${REPO_NAME:-repo-guardrailai}"
 FIDO_SERVICE_NAME="fido-consent-server"
 AGENT_SERVICE_NAME="guardrail-agent-service"
 AGENT_JOB_NAME="guardrail-agent-job"
-SERVICE_ACCOUNT="${SERVICE_ACCOUNT:-sa-roguesquad@${PROJECT_ID}.iam.gserviceaccount.com}"
+SERVICE_ACCOUNT="${SERVICE_ACCOUNT:-sa-guardrail-agent@${PROJECT_ID}.iam.gserviceaccount.com}"
+
 
 echo "================================================================="
 echo "🚀 Deploy GuardrailAI no Google Cloud Platform"
