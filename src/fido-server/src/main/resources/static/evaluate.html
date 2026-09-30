@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GuardrailAI - Solicitação de Avaliação de Carteira</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-messaging-compat.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            min-height: 100vh;
+            padding: 24px 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 1080px;
+            width: 100%;
+        }
+
+        .nav-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #334155;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 20px;
+            font-weight: 700;
+            color: #38bdf8;
+        }
+
+        .nav-links a {
+            color: #94a3b8;
+            text-decoration: none;
+            font-size: 14px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            transition: all 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: #f8fafc;
+            border-color: #38bdf8;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 860px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background-color: #1e293b;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+            border: 1px solid #334155;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #f8fafc;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-desc {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #cbd5e1;
+            margin-bottom: 6px;
+        }
+
+        select, input[type="text"], input[type="number"] {
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: #f8fafc;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        select:focus, input:focus {
+            border-color: #38bdf8;
+        }
+
+        .preset-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 6px;
+        }
+
+        .btn-preset {
+            background: #334155;
+            color: #cbd5e1;
+            border: none;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-preset:hover {
+            background: #475569;
+            color: #f8fafc;
+        }
+
+        .risk-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+        }
+
+        .risk-card {
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 10px 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #0f172a;
+        }
+
+        .risk-card.active {
+            border-color: #38bdf8;
+            background: rgba(56, 189, 248, 0.1);
+        }
+
+        .risk-name {
+            font-size: 12px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .risk-meta {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-top: 2px;
+        }
+
+        .watchlist-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px;
+            min-height: 36px;
+        }
+
+        .chip {
+            background: #0284c7;
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .chip-remove {
+            cursor: pointer;
+            font-weight: bold;
+            opacity: 0.8;
+        }
+
+        .chip-remove:hover {
+            opacity: 1;
+        }
+
+        .add-ticker-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-add {
+            background: #38bdf8;
+            color: #0f172a;
+            border: none;
+            border-radius: 8px;
+            padding: 0 16px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .mode-toggle {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 18px;
+            background: #0f172a;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+        }
+
+        .mode-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #cbd5e1;
+            cursor: pointer;
+        }
+
+        .btn-submit {
+            width: 100%;
+            background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+            color: #fff;
+            border: none;
+            padding: 14px;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 14px 0 rgba(2, 132, 199, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-submit:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px 0 rgba(2, 132, 199, 0.6);
+        }
+
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Coluna de Resultados */
+        .results-box {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #64748b;
+        }
+
+        .empty-icon {
+            font-size: 40px;
+            margin-bottom: 12px;
+        }
+
+        .summary-card {
+            background: #0f172a;
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid #334155;
+            border-left: 4px solid #38bdf8;
+        }
+
+        .summary-header {
+            font-size: 14px;
+            font-weight: 700;
+            color: #38bdf8;
+            margin-bottom: 8px;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            margin: 4px 0;
+            color: #94a3b8;
+        }
+
+        .summary-row strong {
+            color: #f8fafc;
+        }
+
+        .order-card {
+            background: #0f172a;
+            border-radius: 10px;
+            padding: 14px;
+            border: 1px solid #334155;
+        }
+
+        .order-card.approved {
+            border-left: 4px solid #22c55e;
+        }
+
+        .order-card.rejected {
+            border-left: 4px solid #ef4444;
+        }
+
+        .order-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .ticker-badge {
+            font-size: 14px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .status-pill {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 10px;
+            text-transform: uppercase;
+        }
+
+        .pill-approved {
+            background: rgba(34, 197, 94, 0.2);
+            color: #4ade80;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .pill-adjusted {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .pill-rejected {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .order-meta {
+            font-size: 12px;
+            color: #94a3b8;
+            line-height: 1.5;
+        }
+
+        .rationale-box {
+            margin-top: 8px;
+            padding: 8px 12px;
+            background: rgba(15, 23, 42, 0.7);
+            border-radius: 8px;
+            border-left: 3px solid #38bdf8;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #e2e8f0;
+        }
+
+        .gov-box {
+            margin-top: 6px;
+            padding: 6px 10px;
+            background: rgba(15, 23, 42, 0.4);
+            border-radius: 6px;
+            font-size: 11px;
+            color: #94a3b8;
+            line-height: 1.4;
+        }
+
+        .gov-box.rejected {
+            border-left: 3px solid #ef4444;
+            color: #fca5a5;
+        }
+
+        .timer {
+            color: #f59e0b;
+            font-size: 12px;
+            font-weight: 700;
+            background: rgba(245, 158, 11, 0.12);
+            padding: 3px 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(245, 158, 11, 0.25);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .timer.expired {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.12);
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-consent {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 10px;
+            background: #15803d;
+            color: #fff;
+            text-decoration: none;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            transition: background 0.2s;
+        }
+
+        .btn-consent:hover {
+            background: #16a34a;
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            border-top: 3px solid #ffffff;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="nav-header">
+        <div class="brand">
+            <span>🛡️ GuardrailAI</span>
+            <span style="font-size: 12px; color: #64748b; font-weight: normal;">| Governança CVM & B3</span>
+        </div>
+        <div class="nav-links">
+            <a href="/consent.html">🔒 Tela de Consentimento</a>
+        </div>
+    </div>
+
+    <div class="grid">
+        <!-- Formulário de Solicitação -->
+        <div class="card">
+            <div class="card-title">🚀 Solicitar Avaliação de Carteira</div>
+
+            <form id="evalForm">
+                <div class="form-group">
+                    <label for="clientSelect">1. Selecionar Investidor Cadastrado</label>
+                    <select id="clientSelect">
+                        <option value="CLI-001" data-budget="5000" data-risk="CONSERVATIVE" data-watchlist="PETR4.SA,VALE3.SA">CLI-001 - Investidor Conservador (R$ 5.000)</option>
+                        <option value="CLI-002" data-budget="10000" data-risk="MODERATE" data-watchlist="PETR4.SA,ITUB4.SA,BBAS3.SA">CLI-002 - Investidor Moderado (R$ 10.000)</option>
+                        <option value="CLI-003" data-budget="20000" data-risk="AGGRESSIVE" data-watchlist="PRIO3.SA,VALE3.SA,WEGE3.SA">CLI-003 - Investidor Agressivo (R$ 20.000)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="budgetInput">2. Orçamento Disponível (R$)</label>
+                    <input type="number" id="budgetInput" value="5000" min="100" step="100" required>
+                    <div class="preset-buttons">
+                        <button type="button" class="btn-preset" onclick="setBudget(5000)">R$ 5.000</button>
+                        <button type="button" class="btn-preset" onclick="setBudget(10000)">R$ 10.000</button>
+                        <button type="button" class="btn-preset" onclick="setBudget(20000)">R$ 20.000</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>3. Perfil de Risco (Suitability CVM)</label>
+                    <div class="risk-options">
+                        <div class="risk-card active" id="risk-CONSERVATIVE" onclick="setRisk('CONSERVATIVE')">
+                            <div class="risk-name">Conservador</div>
+                            <div class="risk-meta">Teto 20% | Stop 8%</div>
+                        </div>
+                        <div class="risk-card" id="risk-MODERATE" onclick="setRisk('MODERATE')">
+                            <div class="risk-name">Moderado</div>
+                            <div class="risk-meta">Teto 35% | Stop 12%</div>
+                        </div>
+                        <div class="risk-card" id="risk-AGGRESSIVE" onclick="setRisk('AGGRESSIVE')">
+                            <div class="risk-name">Agressivo</div>
+                            <div class="risk-meta">Teto 50% | Stop 15%</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>4. Universo de Ativos B3 (Watchlist)</label>
+                    <div class="watchlist-container" id="watchlistContainer"></div>
+                    <div class="add-ticker-row">
+                        <input type="text" id="newTickerInput" placeholder="Ex: ITUB4.SA, BBDC4.SA..." style="text-transform: uppercase;">
+                        <button type="button" class="btn-add" onclick="addTickerFromInput()">Adicionar</button>
+                    </div>
+                </div>
+
+                <div class="mode-toggle">
+                    <label class="mode-label">
+                        <input type="radio" name="evalMode" value="ai" checked onchange="toggleMode()">
+                        <span>🧠 Autônomo com IA (Gemini 2.5 Flash + Screener B3)</span>
+                    </label>
+                </div>
+
+                <button type="submit" class="btn-submit" id="btnSubmit">
+                    <span id="btnText">🚀 Executar Avaliação de Governança</span>
+                    <div class="spinner" id="btnSpinner" style="display: none;"></div>
+                </button>
+            </form>
+        </div>
+
+        <!-- Coluna de Resultados -->
+        <div class="card">
+            <div class="card-title">📊 Parecer da Auditoria Determinística</div>
+            <div class="card-desc">Resultados validados contra a blindagem matemática Q = ⌊B / P⌋ e stop-loss regulatório.</div>
+
+            <div class="results-box" id="resultsBox">
+                <div class="empty-state">
+                    <div class="empty-icon">🛡️</div>
+                    <div>Aguardando envio dos parâmetros. Clique no botão ao lado para iniciar a avaliação.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentWatchlist = ["PETR4.SA", "VALE3.SA"];
+    let currentRisk = "CONSERVATIVE";
+
+    function renderWatchlist() {
+        const container = document.getElementById("watchlistContainer");
+        container.innerHTML = "";
+        currentWatchlist.forEach((ticker, index) => {
+            const chip = document.createElement("div");
+            chip.className = "chip";
+            chip.innerHTML = `<span>${ticker}</span> <span class="chip-remove" onclick="removeTicker(${index})">✕</span>`;
+            container.appendChild(chip);
+        });
+    }
+
+    function removeTicker(index) {
+        currentWatchlist.splice(index, 1);
+        renderWatchlist();
+    }
+
+    function addTickerFromInput() {
+        const input = document.getElementById("newTickerInput");
+        let val = input.value.trim().toUpperCase();
+        if (val) {
+            if (!val.endsWith(".SA")) {
+                val += ".SA";
+            }
+            if (!currentWatchlist.includes(val)) {
+                currentWatchlist.push(val);
+                renderWatchlist();
+            }
+            input.value = "";
+        }
+    }
+
+    function setBudget(val) {
+        document.getElementById("budgetInput").value = val;
+    }
+
+    function setRisk(risk) {
+        currentRisk = risk;
+        document.querySelectorAll(".risk-card").forEach(el => el.classList.remove("active"));
+        const selected = document.getElementById(`risk-${risk}`);
+        if (selected) selected.classList.add("active");
+    }
+
+    function toggleMode() {
+        // Reservado para alternância de modo manual se desejado
+    }
+
+    // Carregamento inicial do cliente
+    document.getElementById("clientSelect").addEventListener("change", function(e) {
+        const opt = e.target.selectedOptions[0];
+        if (opt) {
+            setBudget(opt.dataset.budget);
+            setRisk(opt.dataset.risk);
+            currentWatchlist = opt.dataset.watchlist.split(",").map(t => t.trim());
+            renderWatchlist();
+        }
+    });
+
+    // Submissão do Formulário
+    document.getElementById("evalForm").addEventListener("submit", async function(e) {
+        e.preventDefault();
+        const clientSelect = document.getElementById("clientSelect");
+        const clientId = clientSelect.value;
+        const clientName = clientSelect.selectedOptions[0].text.split(" - ")[1]?.split(" (")[0] || clientId;
+        const budget = parseFloat(document.getElementById("budgetInput").value);
+
+        const btn = document.getElementById("btnSubmit");
+        const btnText = document.getElementById("btnText");
+        const btnSpinner = document.getElementById("btnSpinner");
+        const resultsBox = document.getElementById("resultsBox");
+
+        btn.disabled = true;
+        btnText.innerText = "Processando Screener B3 & IA...";
+        btnSpinner.style.display = "block";
+
+        resultsBox.innerHTML = `
+            <div class="empty-state">
+                <div class="spinner" style="margin: 0 auto 12px; width: 28px; height: 28px; border-width: 4px;"></div>
+                <div>Executando Screener B3, consulta ao Gemini e Auditoria Guardrail...</div>
+            </div>
+        `;
+
+        try {
+            const payload = {
+                clientId: clientId,
+                clientName: clientName,
+                budget: budget,
+                riskProfile: currentRisk,
+                watchlist: currentWatchlist,
+                deviceToken: localStorage.getItem('fcm_token') || null
+            };
+
+            const response = await fetch("/api/evaluations", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || `Erro HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            renderResults(data);
+        } catch (err) {
+            resultsBox.innerHTML = `
+                <div class="summary-card" style="border-left-color: #ef4444;">
+                    <div class="summary-header" style="color: #ef4444;">❌ Falha na Avaliação</div>
+                    <div style="font-size: 13px; color: #cbd5e1;">${err.message}</div>
+                    <div style="font-size: 11px; color: #94a3b8; margin-top: 8px;">Certifique-se de que o Agente Python esteja rodando na porta 8000.</div>
+                </div>
+            `;
+        } finally {
+            btn.disabled = false;
+            btnText.innerText = "🚀 Executar Avaliação de Governança";
+            btnSpinner.style.display = "none";
+        }
+    });
+
+    function renderResults(data) {
+        const resultsBox = document.getElementById("resultsBox");
+        const allocated = data.totalAllocated || 0.0;
+        const remaining = data.remainingBudget || 0.0;
+        const approvedOrders = data.approvedOrders || [];
+        const rejectedOrders = data.rejectedOrders || [];
+
+        let html = `
+            <div class="summary-card">
+                <div class="summary-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                    <span>📈 Parecer Geral: ${data.clientId} (${data.riskProfile})</span>
+                    <span id="evalTtlBadge" class="timer">⏳ TTL: <span id="globalTtlSec">${data.ttlSeconds || 120}</span>s</span>
+                </div>
+                <div class="summary-row"><span>Status:</span> <strong>${data.summary}</strong></div>
+                <div class="summary-row"><span>Validade Regulatória (TTL):</span> <strong id="evalTtlDetail" style="color: #f59e0b;">${data.ttlSeconds || 120} segundos (Contagem regressiva ativa)</strong></div>
+                <div class="summary-row"><span>Capital Alocado:</span> <strong>R$ ${allocated.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong></div>
+                <div class="summary-row"><span>Saldo Remanescente:</span> <strong>R$ ${remaining.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong></div>
+                ${data.portfolioRationale ? `
+                <div style="margin-top: 10px; padding: 10px 12px; background: rgba(56, 189, 248, 0.08); border-radius: 8px; border: 1px solid rgba(56, 189, 248, 0.25);">
+                    <div style="font-size: 12px; font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 6px;">
+                        <span>🌐</span> Tese Macro do Portfólio (IA):
+                    </div>
+                    <div style="color: #cbd5e1; font-size: 12px; margin-top: 4px; line-height: 1.5;">${data.portfolioRationale}</div>
+                </div>` : ""}
+            </div>
+        `;
+
+        if (approvedOrders.length > 0) {
+            html += `<div style="font-size: 13px; font-weight: 700; color: #4ade80; margin-top: 6px;">✅ Ordens Aprovadas / Ajustadas (${approvedOrders.length}):</div>`;
+            approvedOrders.forEach(ord => {
+                const isAdjusted = ord.status === "AUTO_ADJUSTED";
+                const pillClass = isAdjusted ? "pill-adjusted" : "pill-approved";
+                const totalCost = (ord.totalCost || (ord.quantity * ord.unitPrice)).toLocaleString('pt-BR', {minimumFractionDigits: 2});
+                const consentLink = ord.challengeId 
+                    ? `consent.html?challengeId=${encodeURIComponent(ord.challengeId)}` 
+                    : (ord.consentUrl || '#');
+
+                html += `
+                    <div class="order-card approved">
+                        <div class="order-title">
+                            <span class="ticker-badge">[${ord.ticker}] ${ord.action}</span>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                ${(ord.challengeId || ord.consentUrl) ? `<span class="timer order-ttl-badge" style="font-size: 11px; padding: 2px 6px;">⏳ TTL: <span class="order-ttl-sec">${ord.ttlSeconds || 120}</span>s</span>` : ""}
+                                <span class="status-pill ${pillClass}">${ord.status}</span>
+                            </div>
+                        </div>
+                        <div class="order-meta">
+                            <strong>${ord.quantity}x</strong> cotas @ R$ ${ord.unitPrice.toFixed(2)} | Total: <strong>R$ ${totalCost}</strong><br>
+                            Stop-Loss: R$ ${ord.stopLossPrice ? ord.stopLossPrice.toFixed(2) : "N/A"}<br>
+                            
+                            <div class="rationale-box">
+                                <strong style="color: #38bdf8;">🧠 Racional da IA:</strong> ${ord.rationale || "Tese técnica elaborada via Gemini com base em médias móveis e momentum B3."}
+                            </div>
+
+                            <div class="gov-box">
+                                🛡️ <strong>Parecer Guardrail:</strong> ${ord.reason}
+                            </div>
+                        </div>
+                        ${(ord.challengeId || ord.consentUrl) ? `<a href="${consentLink}" target="_blank" class="btn-consent">🔒 Assinar Desafio FIDO2 (${(ord.challengeId || '').substring(0, 8)}...)</a>` : ""}
+                    </div>
+                `;
+            });
+        }
+
+        if (rejectedOrders.length > 0) {
+            html += `<div style="font-size: 13px; font-weight: 700; color: #f87171; margin-top: 6px;">🛑 Ordens Rejeitadas (${rejectedOrders.length}):</div>`;
+            rejectedOrders.forEach(ord => {
+                html += `
+                    <div class="order-card rejected">
+                        <div class="order-title">
+                            <span class="ticker-badge">[${ord.ticker}] ${ord.action}</span>
+                            <span class="status-pill pill-rejected">REJEITADA</span>
+                        </div>
+                        <div class="order-meta">
+                            ${ord.quantity ? `<strong>${ord.quantity}x</strong> cotas @ R$ ${ord.unitPrice ? ord.unitPrice.toFixed(2) : "N/A"}<br>` : ""}
+                            ${ord.stopLossPrice ? `Stop-Loss Proposto: R$ ${ord.stopLossPrice.toFixed(2)}<br>` : ""}
+                            
+                            ${ord.rationale ? `
+                            <div class="rationale-box" style="border-left-color: #ef4444;">
+                                <strong style="color: #f87171;">🧠 Racional da IA:</strong> ${ord.rationale}
+                            </div>` : ""}
+
+                            <div class="gov-box rejected">
+                                🛑 <strong>Motivo da Rejeição:</strong> ${ord.reason}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        resultsBox.innerHTML = html;
+
+        // Iniciar contagem regressiva ativa do TTL
+        if (window.evalTtlInterval) {
+            clearInterval(window.evalTtlInterval);
+        }
+
+        let remainingSec = data.ttlSeconds || 120;
+        window.evalTtlInterval = setInterval(() => {
+            remainingSec--;
+            const ttlBadge = document.getElementById("evalTtlBadge");
+            const globalTtlSec = document.getElementById("globalTtlSec");
+            const ttlDetail = document.getElementById("evalTtlDetail");
+            const orderTtlSecs = document.querySelectorAll(".order-ttl-sec");
+
+            if (remainingSec > 0) {
+                if (globalTtlSec) globalTtlSec.innerText = remainingSec;
+                if (ttlDetail) ttlDetail.innerText = `${remainingSec} segundos restantes`;
+                orderTtlSecs.forEach(el => el.innerText = remainingSec);
+            } else {
+                clearInterval(window.evalTtlInterval);
+                if (ttlBadge) {
+                    ttlBadge.innerHTML = `⛔ TTL: EXPIRADO`;
+                    ttlBadge.classList.add("expired");
+                }
+                if (ttlDetail) {
+                    ttlDetail.innerText = `Expirado (Necessário solicitar nova avaliação)`;
+                    ttlDetail.style.color = "#ef4444";
+                }
+                document.querySelectorAll(".order-ttl-badge").forEach(badge => {
+                    badge.innerHTML = `⛔ EXPIRADO`;
+                    badge.classList.add("expired");
+                });
+                document.querySelectorAll(".btn-consent").forEach(btn => {
+                    btn.style.opacity = "0.5";
+                    btn.style.pointerEvents = "none";
+                    btn.innerText = "⛔ Desafio Expirado";
+                });
+            }
+        }, 1000);
+    }
+
+    // ==========================================
+    // INICIALIZAÇÃO FIREBASE PUSH NOTIFICATION
+    // ==========================================
+    const firebaseConfig = {
+        apiKey: "AIzaSyClcgX40Hs5fTGV57PY4JGRY78NJ6tFCco",
+        authDomain: "guardrail-notifier-mvp.firebaseapp.com",
+        projectId: "guardrail-notifier-mvp",
+        storageBucket: "guardrail-notifier-mvp.appspot.com",
+        messagingSenderId: "376986876849",
+        appId: "1:376986876849:web:57487778033c282ebf1b90",
+        measurementId: "G-EHHM4NNF1J"
+    };
+    const VAPID_KEY = "BDhpWazjkTyFCMYUZgh9ADUjDrONHvu0AygG_BItHL7mRT8l_ErFaITgF6yrPeCm0jzrREVDrIWL9sKomWUXmEk";
+
+    if (typeof firebase !== 'undefined') {
+        try {
+            firebase.initializeApp(firebaseConfig);
+            const messaging = firebase.messaging();
+
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/firebase-messaging-sw.js')
+                    .then(async (registration) => {
+                        const readyReg = await navigator.serviceWorker.ready;
+                        if (Notification.permission === 'default') {
+                            await Notification.requestPermission();
+                        }
+                        if (Notification.permission === 'granted') {
+                            try {
+                                const token = await messaging.getToken({
+                                    serviceWorkerRegistration: readyReg,
+                                    vapidKey: VAPID_KEY
+                                });
+                                if (token) {
+                                    console.log('🔑 Token FCM registrado no navegador:', token);
+                                    localStorage.setItem('fcm_token', token);
+                                }
+                            } catch (tokenErr) {
+                                console.warn('Não foi possível obter o token FCM:', tokenErr);
+                            }
+                        }
+                    })
+                    .catch(err => console.warn('SW register info:', err));
+            }
+
+            messaging.onMessage((payload) => {
+                console.log('📩 Push FCM recebido em foreground:', payload);
+                const data = payload.data || {};
+                const title = data.title || "🚨 GuardrailAI - Autorização de Ordem";
+                if (Notification.permission === 'granted') {
+                    const notif = new Notification(title, {
+                        body: data.body || "Nova ordem disponível para assinatura.",
+                        icon: 'https://www.gstatic.com/mobilesdk/160503_mobilesdk/logo/2x/firebase_28.png',
+                        tag: data.tag || ('guardrail-order-' + (data.challengeId || 'single'))
+                    });
+                    notif.onclick = () => {
+                        window.focus();
+                        if (data.challengeId) {
+                            window.location.href = `consent.html?challengeId=${data.challengeId}`;
+                        } else if (data.consentUrl) {
+                            window.location.href = data.consentUrl;
+                        }
+                    };
+                }
+            });
+        } catch (e) {
+            console.warn('Erro ao inicializar Firebase em evaluate.html:', e);
+        }
+    }
+
+    // Inicialização
+    renderWatchlist();
+</script>
+
+</body>
+</html>

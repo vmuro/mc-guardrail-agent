@@ -1,0 +1,26 @@
+[
+  {
+    "client_id": "CLI-001",
+    "name": "Investidor Conservador",
+    "risk_profile": "CONSERVATIVE",
+    "allocated_budget": 5000.0,
+    "notification_channel": "FCM_PUSH",
+    "fido_user_handle": "user_cli_001"
+  },
+  {
+    "client_id": "CLI-002",
+    "name": "Investidor Moderado",
+    "risk_profile": "MODERATE",
+    "allocated_budget": 10000.0,
+    "notification_channel": "FCM_PUSH",
+    "fido_user_handle": "user_cli_002"
+  },
+  {
+    "client_id": "CLI-003",
+    "name": "Investidor Agressivo",
+    "risk_profile": "AGGRESSIVE",
+    "allocated_budget": 20000.0,
+    "notification_channel": "FCM_PUSH",
+    "fido_user_handle": "user_cli_003"
+  }
+]
