@@ -1,17 +1,17 @@
-# GuardrailAI - Middleware B2B de Governança e Autonomia Proativa para Mercado de Capitais
+# GuardrailAI
 
-> _"Middleware B2B que combina autonomia proativa de mercado (Gemini / Vertex AI) com motor de Guardrails 100% determinísticos, blindagem contra alucinações matemáticas e consentimento regulatório (CVM)."_
+> _Middleware B2B de governança que combina autonomia proativa de mercado (Gemini / Vertex AI) com motor de Guardrails 100% determinísticos, blindagem contra alucinações matemáticas e consentimento regulatório (CVM)._
 
 **Desafio de Agentes de IA — Mercado de Capitais**  
-Iniciativa DGCU02 + BDP em parceria com o Google · SMC26
+Iniciativa DGCU07 + BDP em parceria com o Google · SMC26 (27 a 29 de outubro)
 
 ---
 
 ## 👥 Equipe
 
-| Papel | Nome | E-mail GFT | Estrutura |
-|---|---|---|---|
-| **Capitão** | Victor Rosa | vrmu@gft.com | DGCU02 / BDP |
+| Papel | Nome | E-mail GFT |
+|---|---|---|
+| **Capitão** | Victor Rosa | vrmu@gft.com |
 
 **Nome da equipe:** GuardrailAI
 
@@ -25,217 +25,160 @@ Embora os modelos de linguagem (LLMs) possam sugerir alocações dinâmicas e op
 
 Os sistemas tradicionais carecem de uma camada intermediária (*middleware*) robusta que combine uma **verificação determinística estrita** (recalculando tetos financeiros e limites de orçamento em código) com um **fluxo de consentimento regulatório auditável** e compatível com as normas da CVM.
 
----
-
-## 💡 A Solução: GuardrailAI
-
-O **GuardrailAI** atua como um middleware B2B de governança que desacopla a camada analítica de IA da camada determinística de risco e execução, estruturado em **3 Pilares Fundamentais**:
-
-### 🏛️ Os 3 Pilares da Arquitetura
-
-```mermaid
-flowchart LR
-    subgraph P1 ["Pilar 1: Autonomia Proativa"]
-        Screener["Screener Multi-Indicador<br/>(MACD, Bollinger, EMAs, RSI, News)"] --> Gemini["Gemini 2.5 Flash<br/>(Análise de Tese)"]
-    end
-
-    subgraph P2 ["Pilar 2: Segurança Inviolável"]
-        Gemini --> Guardrail["Guardrail Engine 100% Determinístico<br/>- Q = ⌊B / P⌋ (Blindagem Numérica)<br/>- Stop-Loss Obrigatório (Máx 15%)<br/>- Perfil de Risco (Conservador/Mod/Agr)"]
-    end
-
-    subgraph P3 ["Pilar 3: Consentimento Regulatório"]
-        Guardrail --> Consent["Módulo de Não-Repúdio (CVM)<br/>- Payload Binding (HMAC-SHA256)<br/>- Biometria Passkey / FIDO2<br/>- TTL Estrito de 120 Segundos"]
-    end
-
-    Consent --> CloudLog["Cloud Logging<br/>Trilha de Auditoria Imutável"]
-```
-
-1. **Autonomia Proativa (Screener + ReAct & Blindagem Matemática):**  
-   O utilizador define apenas o orçamento ($B$) e o perfil de risco. O agente varre autonomamente a watchlist da B3, processa indicadores técnicos avançados (MACD, Bollinger, Médias Rápidas/Lentas, RSI) e notícias. O motor de execução calcula deterministicamente a quantidade exata de ativos ($Q = \lfloor B/P \rfloor$), eliminando qualquer possibilidade de alucinação numérica da IA.
-
-2. **Segurança Inviolável (Guardrail Engine 100% Determinístico):**  
-   A IA atua de forma estritamente analítica e não envia ordens diretas à bolsa. Toda intenção em JSON é interceptada por uma camada determinística em código Python que bloqueia instantaneamente ordens sem Stop-Loss, com perda excessiva (> 15%) ou que violem os tetos de concentração da carteira.
-
-3. **Consentimento Regulatório e Não-Repúdio (CVM):**  
-   Operações financeiras geram uma solicitação com **Payload Binding Criptográfico (HMAC-SHA256)** inviolável e aprovação biométrica (**Passkey / FIDO2**) com **TTL estrito de 120 segundos**, garantindo não-repúdio e proteção contra variações bruscas de mercado.
+**Público-alvo:**
+- **Investidores Individuais (Varejo Alta Renda):** Co-piloto automatizado para leitura de dados e gestão de carteira pessoal sem necessidade de acompanhamento em tempo integral.
+- **Escritórios de Investimento & Assessores (AAI):** Monitoramento contínuo e supervisão simultânea de centenas de carteiras de clientes com escala e personalização.
+- **Gestoras & Wealth Management:** Execução de rotinas de rebalanceamento com cumprimento estrito de mandatos e eliminação de viés operacional.
 
 ---
 
-## 🎯 Público-Alvo
+## 💡 A Solução
 
-- **Investidores Individuais (Varejo Alta Renda):** Utilizam o agente como um co-piloto no aplicativo da corretora ou do banco para gerenciar a carteira pessoal com automação na leitura de dados, dispensando a necessidade de acompanhar o mercado em tempo integral.
-- **Escritórios de Investimento & Assessores (AAI):** Buscam o monitoramento contínuo da carteira de múltiplos clientes em paralelo, garantindo escala operacional e a capacidade de supervisionar centenas de carteiras sem perder a personalização.
-- **Gestoras & Wealth Management:** Empregam a tecnologia na execução de rotinas de rebalanceamento e ajuste de fundos operados, obtendo precisão matemática na execução de regras de compliance e redução do viés operacional.
+O **GuardrailAI** é um middleware B2B de governança que atua como ponte segura entre modelos de inteligência artificial generativa e os sistemas de execução no Mercado de Capitais. A solução desacopla a inteligência analítica da execução financeira, estruturada em **3 Pilares Fundamentais**:
+
+1. **Autonomia Proativa (Screener + ReAct):** O utilizador define apenas o orçamento ($B$) e o perfil de risco. O agente varre autonomamente a watchlist da B3, processa indicadores técnicos (MACD, Bollinger, EMAs 9/21/50/200, RSI) e notícias, identificando a melhor oportunidade com tese fundamentada.
+2. **Segurança Inviolável (Guardrail Engine 100% Determinístico):** A IA atua de forma estritamente analítica e nunca envia ordens diretas à bolsa. Toda intenção em JSON é interceptada por uma camada determinística em código que recalcula a quantidade exata ($Q = \lfloor B/P \rfloor$), rejeita ordens sem Stop-Loss (ou com perda > 15%) e impõe tetos rígidos de concentração por perfil de risco.
+3. **Consentimento Regulatório e Não-Repúdio (CVM):** Operações geram uma solicitação com **Payload Binding Criptográfico (HMAC-SHA256)**, notificação Push instantânea (FCM) e autorização biométrica **Passkey / FIDO2 (WebAuthn)** com **TTL estrito de 120 segundos**, produzindo trilha de auditoria imutável no Cloud Logging.
+
+### Principais Funcionalidades
+
+- **Varredura Técnica Multi-Indicador B3:** Cálculo automático de momentum, reversão à média e suporte/resistência em tempo real.
+- **Blindagem Matemática Antialucinação ($Q = \lfloor B/P \rfloor$):** Recálculo exato de quantidades em código determinístico, impossibilitando erros de escala ou ordens fracionárias incorretas.
+- **Gestão Obrigatória de Risco (Stop-Loss Ativo):** Bloqueio sistemático de ordens sem preço de saída de proteção ou com distorção matemática.
+- **Consentimento Biométrico FIDO2 com TTL de 120s:** Assinatura na ponta do investidor (TouchID, FaceID, Windows Hello) com validade curta contra volatilidade excessiva.
+- **Notificações Push Web (FCM Data-Only):** Envio instantâneo da solicitação para o dispositivo cadastrado do cliente.
+- **Arquitetura Zero-Trust de Identidade:** Interceptors que validam tokens de identidade do Google Cloud antes de liberar qualquer execução.
 
 ---
 
-## 📊 Impacto de Negócio
+## 📊 Impacto
 
-- **Eficiência Operacional:** Reduz em mais de 90% o tempo necessário para varredura técnica de mercado e checagem de conformidade de ordens.
-- **Eliminação de Risco (Zero Alucinações):** 100% das ordens passam por recálculo determinístico $Q = \lfloor B/P \rfloor$ e validação estrita de Stop-Loss antes de qualquer autorização.
-- **Conformidade Regulatória Total:** Trilha imutável de auditoria com assinatura HMAC-SHA256 e consentimento biométrico com TTL de 120s para compliance com a CVM.
+- **Eficiência:** Reduz em **mais de 90%** o tempo necessário para varredura técnica de mercado, cálculo de risco e checagem de conformidade de ordens.
+- **Redução de erros:** **0% de alucinações matemáticas** em alocação financeira e garantia de 100% de ordens aprovadas com Stop-Loss válido.
+- **Valor para o cliente / negócio:** Conformidade regulatória plena com a CVM, não-repúdio via criptografia de chave pública e proteção do investidor contra variações bruscas de mercado.
 
 ---
 
-## 🏗️ Estrutura Modular do Projeto
+## 🏛️ Arquitetura
 
-O repositório é organizado em módulos desacoplados com ciclos de vida, testes e ambientes independentes, mantendo recursos e contratos compartilhados centralizados:
+![Arquitetura da Solução](docs/arquitetura.png)
+
+**Descrição do fluxo:**
+1. O investidor ou assessor solicita a avaliação via interface web ou conector Gemini Enterprise.
+2. O **Módulo Python (FastAPI)** coleta dados da B3, aciona o **Gemini 2.5 Flash (Vertex AI)** para elaboração de tese e submete as propostas ao **Guardrail Engine**.
+3. O Guardrail recalcula deterministicamente quantidades e tetos de risco. Ordens aprovadas geram um hash criptográfico (HMAC-SHA256).
+4. O **Módulo Java (Spring Boot / FIDO2)** registra o desafio em memória concorrente com TTL de 120 segundos e dispara uma Notificação Push via **Firebase Cloud Messaging**.
+5. O investidor assina biometricamente o desafio via **WebAuthn Passkey** na tela de consentimento. A ordem assinada e auditada é persistida com registro imutável no **Google Cloud Logging**.
+
+---
+
+## 🛠️ Stack Tecnológica
+
+| Camada | Tecnologia |
+|---|---|
+| Plataforma de IA | Gemini Enterprise & Google Cloud Vertex AI |
+| Abordagem | Code (Vertex AI + ADK) + Low-Code Tool para Gemini Enterprise |
+| Modelo(s) | Gemini 2.5 Flash |
+| Recursos usados | Function Calling, ReAct Multi-Indicador, WebAuthn FIDO2, FCM Web Push, Cloud Logging |
+| Backend & Governança | Python 3.12 (FastAPI, Pandas, TA, Pytest) |
+| Servidor de Consentimento | Java 21 (Spring Boot 4.x, Maven, WebAuthn) |
+| Infraestrutura em Nuvem | Google Cloud Run (Services & Jobs), Artifact Registry |
+
+---
+
+## ▶️ Demo
+
+🔗 **Link da demo online (Cloud Run via Proxy):**  
+- **Painel de Avaliação de Portfólio:** `http://localhost:8080/evaluate.html`
+- **Painel de Consentimento Biométrico FIDO2:** `http://localhost:8080/consent.html`
+
+> 📘 **Guia Completo de Execução:** Para o passo a passo detalhado de inicialização local (com 1 comando em Linux/Windows/Docker), execução modular, testes, deploy no Cloud Run e acesso seguro via proxy, consulte o **[`docs/GUIA_EXECUCAO.md`](docs/GUIA_EXECUCAO.md)**.
+
+**Perfis Sintéticos para Teste:**
+Os perfis simulados de investidores estão pré-configurados em [`data/clients.json`](data/clients.json):
+- `CLI-001` (Perfil Conservador, Teto de Risco 20%)
+- `CLI-002` (Perfil Moderado, Teto de Risco 35%)
+- `CLI-003` (Perfil Agressivo, Teto de Risco 50%)
+
+### 🔔 Notificações Push no Google Chrome (FCM):
+Para receber alertas em tempo real e assinar biometricamente as ordens recomendadas:
+1. Acesse o painel em `http://localhost:8080/evaluate.html` no Chrome (contexto seguro/`localhost`).
+2. Clique em **Permitir** (*Allow*) no pop-up nativo de notificações.
+3. Ao submeter uma avaliação, clique na notificação que surge na área de trabalho para abrir a tela de consentimento Passkey com TTL de 120s.
+- 📖 *Para o guia completo de credenciais e permissões no Chrome, consulte [`docs/FCM_SETUP.md`](docs/FCM_SETUP.md) e [`docs/GUIA_EXECUCAO.md`](docs/GUIA_EXECUCAO.md).*
+
+---
+
+## 🎥 Vídeo (Pitch + Demo)
+
+🔗 **Link do vídeo:** Consulte o arquivo oficial [`docs/video/link.md`](docs/video/link.md) para a URL da gravação no SharePoint GFT / YouTube.
+
+⏱️ **Duração:** 3 a 5 min
+
+---
+
+## 📎 Artefatos Entregáveis
+
+Todos os entregáveis obrigatórios do desafio estão organizados neste repositório conforme a tabela abaixo:
+
+| Entregável | Formato | Onde está | Status |
+|---|---|---|---|
+| Demo funcional | Link / código | [Seção Demo](#️-demo) + [`/src`](src/) | [x] |
+| Vídeo (pitch + demo) | Link (URL) | [Seção Vídeo](#-vídeo-pitch--demo) + [`/docs/video/link.md`](docs/video/link.md) | [x] |
+| One-pager (problema, solução, impacto) | **PDF** (1 página) | [`/docs/one-pager.pdf`](docs/one-pager.pdf) | [x] |
+| Diagrama de arquitetura | **PDF** + imagem | [`/docs/arquitetura.pdf`](docs/arquitetura.pdf) · [`/docs/arquitetura.png`](docs/arquitetura.png) | [x] |
+| Guia Unificado de Execução (Local & GCP) | Markdown | [`/docs/GUIA_EXECUCAO.md`](docs/GUIA_EXECUCAO.md) | [x] |
+| Guia de Notificações FCM & Chrome | Markdown | [`/docs/FCM_SETUP.md`](docs/FCM_SETUP.md) | [x] |
+| Guia de Infraestrutura GCP (Apêndice) | Markdown | [`/docs/GCP_GUIDE.md`](docs/GCP_GUIDE.md) | [x] |
+| Termo de Propriedade & Autoria | Markdown | [`/NOTICE.md`](NOTICE.md) | [x] |
+
+---
+
+## 📁 Estrutura do Repositório
 
 ```
 .
-├── agent-python/                      # [MÓDULO] Agente de IA, Guardrails e Screener B3
-│   ├── src/
-│   │   ├── core/
-│   │   │   ├── agent.py               # Integração cognitiva com Gemini 2.5 Flash (Vertex AI)
-│   │   │   ├── guardrail.py           # Guardrail Determinístico Q = floor(B/P)
-│   │   │   ├── consent.py             # Cliente de Consentimento REST & Payload Binding
-│   │   │   ├── notifier.py            # Notificações WhatsApp / Webhooks
-│   │   │   └── logger.py              # Cloud Logging estruturado
-│   │   ├── tools/
-│   │   │   ├── screener.py            # Coleta de Indicadores B3 (MACD, Bollinger, EMAs, RSI)
-│   │   │   └── news_parser.py         # Parsing de notícias financeiras Google News RSS
-│   │   └── main.py                    # Orquestrador do pipeline de governança
-│   ├── tests/                         # Suíte de testes Pytest do agente
-│   │   ├── test_guardrail.py          # Validação de regras e blindagem matemática
-│   │   ├── test_consent.py            # Validação de HMAC, Passkey e TTL de 120s
-│   │   ├── test_screener.py           # Validação dos indicadores técnicos
-│   │   └── test_config.py             # Validação de argumentos e carregamento de lote
-│   ├── Dockerfile                     # Container leve do Python Agent (Cloud Run Job)
-│   ├── pytest.ini                     # Configuração Pytest
-│   ├── requirements.txt               # Dependências Python isoladas
-│   └── README.md                      # Instruções específicas do Agente Python
+├── README.md                  ← Este arquivo (o cartão de visita e landing page do agente)
 │
-├── fido-server/                       # [MÓDULO] Servidor WebAuthn / Passkey (Java 21 / Spring Boot)
-│   ├── src/
-│   │   ├── main/
-│   │   │   ├── java/com/guardrail/fido/
-│   │   │   │   ├── controller/        # ConsentApiController.java
-│   │   │   │   ├── model/             # ConsentChallenge.java
-│   │   │   │   ├── service/           # ConsentService.java
-│   │   │   │   └── FidoServerApplication.java
-│   │   │   └── resources/
-│   │   │       ├── application.yml    # Configurações do Spring Boot
-│   │   │       └── static/consent.html # WebUI Biométrica WebAuthn / Passkey
-│   │   └── test/                      # Testes unitários do servidor FIDO
-│   ├── Dockerfile                     # Container multi-stage Java 21
-│   ├── pom.xml                        # Configuração de dependências Maven
-│   ├── mvnw / mvnw.cmd                # Maven Wrapper
-│   └── README.md                      # Instruções específicas do Servidor FIDO
+├── src/                       ← CÓDIGO-FONTE da solução (Arquitetura Poliglota)
+│   ├── requirements.txt       (dependências Python do agente esperadas pela banca)
+│   ├── agent-python/          (módulo cognitivo de IA, screener B3, guardrails, FastAPI)
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   ├── src/               (core/, tools/, server.py, main.py)
+│   │   └── tests/             (suíte de testes unitários pytest)
+│   └── fido-server/           (módulo de consentimento regulatório WebAuthn FIDO2 / Java 21)
+│       ├── Dockerfile
+│       ├── pom.xml
+│       └── src/               (APIs de consentimento biométrico, desafios TTL 120s)
 │
-├── contracts/                         # [COMPARTILHADO] Schemas e Contratos REST Inter-Módulos
-│   ├── consent-challenge.schema.json  # Schema formal JSON do Desafio de Consentimento
-│   └── README.md                      # Especificação técnica do contrato de dados
+├── data/                      ← DADOS mock / públicos / sintéticos
+│   ├── clients.json           (perfis simulados de investidores CLI-001, CLI-002, CLI-003)
+│   └── README.md              (declaração de origem de dados 100% fictícios e públicos)
 │
-├── config/                            # [COMPARTILHADO] Configurações de Carteiras e Clientes
-│   └── clients.json                   # Watchlists, perfis de risco e orçamentos
+├── docs/                      ← DOCUMENTAÇÃO e artefatos de entrega
+│   ├── one-pager.pdf          → PDF executivo: problema, solução e impacto (OBRIGATÓRIO)
+│   ├── arquitetura.pdf        → PDF: diagrama da arquitetura em alta resolução (OBRIGATÓRIO)
+│   ├── arquitetura.png        → Imagem do diagrama da solução (referenciada no README)
+│   ├── GUIA_EXECUCAO.md       → Guia unificado de execução (Local bare-metal, Docker e GCP Cloud Run)
+│   ├── FCM_SETUP.md           → Guia de configuração da Service Account FCM e Google Chrome
+│   ├── GCP_GUIDE.md           → Guia técnico de acesso e infraestrutura Google Cloud
+│   ├── video/
+│   │   └── link.md            → Arquivo texto com o LINK do vídeo de pitch e demo
+│   └── imagens/               → Descrição e capturas de tela das interfaces web
 │
-├── docs/                              # [COMPARTILHADO] Documentação de Arquitetura
-│   ├── arquitetura-referencia.png     # Diagrama visual dos 3 Pilares
-│   └── ARCHITECTURE.md                # Especificação arquitetural completa
-│
-├── scripts/                           # [COMPARTILHADO] Automação, Deploy e Execução Local
-│   ├── deploy_cloud_run.sh            # Script oficial de deploy no GCP Cloud Run Jobs
-│   ├── run_local.sh                   # Inicializador conjunto local (Linux/WSL)
-│   └── run_local.ps1                  # Inicializador conjunto local (Windows PowerShell)
-│
-├── docker-compose.yml                 # Orquestração local unificada (FIDO + Agent)
-├── .env.example                       # Variáveis de ambiente recomendadas
-└── README.md                          # Visão geral do ecossistema GuardrailAI
+├── contracts/                 ← JSON Schemas e contratos formais de payload
+├── scripts/                   ← Scripts de automação, deploy no Cloud Run e inicialização local
+└── NOTICE.md                  ← Propriedade intelectual da GFT; autoria dos participantes
 ```
 
----
-
-## ⚙️ Pré-requisitos
-
-* **Python:** 3.12+ (ou 3.14 via WSL/Linux)
-* **Java:** OpenJDK 21 (para compilar/executar o `fido-server`)
-* **Google Cloud SDK (`gcloud`)** autenticado (para deploy em nuvem)
-* **Docker & Docker Compose** (opcional para execução conteinerizada)
-
----
-
-## 🚀 Como Executar
-
-### Opção 1: Execução Completa Integrada com 1 Comando (Recomendado)
-
-- **No Linux / WSL / macOS:**
-  ```bash
-  ./scripts/run_local.sh
-  ```
-
-- **No Windows (PowerShell):**
-  ```powershell
-  .\scripts\run_local.ps1
-  ```
-
-- **Via Docker Compose:**
-  ```bash
-  docker compose up --build
-  ```
-
----
-
-### Opção 2: Execução Independente por Módulo
-
-#### 🐍 Módulo Python (`agent-python`)
-```bash
-cd agent-python
-source .venv/bin/activate  # ou .venv\Scripts\activate no Windows
-
-# Rodar testes automatizados:
-pytest -v
-
-# Executar pipeline de governança:
-python src/main.py --config ../config/clients.json
-```
-
-#### ☕ Módulo Java (`fido-server`)
-```bash
-cd fido-server
-
-# Rodar testes:
-./mvnw test
-
-# Iniciar servidor Spring Boot (porta 8080):
-./mvnw spring-boot:run
-```
-
----
-
-## ☁️ Deploy no Google Cloud (Cloud Run Jobs)
-
-### 🚀 Deploy Automatizado do Agente com 1 Comando
-
-```bash
-./scripts/deploy_cloud_run.sh
-```
-
----
-
-### 🛠️ Deploy Manual do Container Python
-
-```bash
-# 1. Autenticar o Docker com o Artifact Registry do Google Cloud
-gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-
-# 2. Construir a imagem a partir de agent-python
-docker build -t us-central1-docker.pkg.dev/gft-brazil-bu-gcp/repo-guardrailai/guardrail-agent:latest ./agent-python
-
-# 3. Enviar a imagem para o Artifact Registry
-docker push us-central1-docker.pkg.dev/gft-brazil-bu-gcp/repo-guardrailai/guardrail-agent:latest
-
-# 4. Criar ou atualizar o Cloud Run Job
-gcloud run jobs deploy guardrail-agent-job \
-  --image us-central1-docker.pkg.dev/gft-brazil-bu-gcp/repo-guardrailai/guardrail-agent:latest \
-  --region us-central1 \
-  --set-env-vars="CLIENTS_CONFIG_FILE=config/clients.json" \
-  --memory=1Gi \
-  --cpu=1
-```
-
-### 🧪 Execução na Nuvem
-
-```bash
-gcloud run jobs execute guardrail-agent-job --region us-central1
-```
-
+### Onde está gravado cada tipo de arquivo:
+- **Código e prompts** → [`src/`](src/) e [`src/requirements.txt`](src/requirements.txt).
+- **Dados** → [`data/`](data/) (100% sintéticos e documentados em [`data/README.md`](data/README.md)).
+- **One-pager** → [`docs/one-pager.pdf`](docs/one-pager.pdf) (formato PDF de 1 página executiva).
+- **Diagrama de arquitetura** → [`docs/arquitetura.pdf`](docs/arquitetura.pdf) e [`docs/arquitetura.png`](docs/arquitetura.png).
+- **Guia de Execução (Local & GCP)** → [`docs/GUIA_EXECUCAO.md`](docs/GUIA_EXECUCAO.md).
+- **Notificações Push & Chrome** → [`docs/FCM_SETUP.md`](docs/FCM_SETUP.md).
+- **Infraestrutura Cloud** → [`docs/GCP_GUIDE.md`](docs/GCP_GUIDE.md).
+- **Vídeo** → [`docs/video/link.md`](docs/video/link.md).
+- **Imagens da demo** → [`docs/imagens/`](docs/imagens/).

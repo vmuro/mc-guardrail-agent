@@ -48,7 +48,7 @@ Servidor de **Consentimento Regulatório, Assinatura Biométrica (Passkey / WebA
 
 ### 2. Executando o Servidor Spring Boot
 ```bash
-cd fido-server
+cd src/fido-server
 
 # No Linux / WSL / macOS:
 ./mvnw spring-boot:run
@@ -59,11 +59,13 @@ cd fido-server
 
 O servidor estará disponível em `http://localhost:8080`.
 
-### 3. Acessando a Interface de Consentimento Biométrico
-Abra no navegador (ou compartilhe via ngrok para testes em smartphone):
-```
-http://localhost:8080/consent.html?challengeId=<ID_DO_DESAFIO>
-```
+### 3. Acessando as Interfaces Web
+- **Painel de Avaliação de Portfólio & Web Push:** `http://localhost:8080/evaluate.html`  
+  *(Ao acessar no Chrome, permita notificações para registrar o Service Worker `firebase-messaging-sw.js` e receber os alertas nativos do SO).*
+- **Interface de Consentimento Biométrico (Passkey / WebAuthn):**  
+  `http://localhost:8080/consent.html?challengeId=<ID_DO_DESAFIO>`
+
+📖 *Consulte o [Guia de Notificações FCM & Chrome](../../docs/FCM_SETUP.md) para detalhes de configuração.*
 
 ---
 

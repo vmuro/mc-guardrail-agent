@@ -30,11 +30,7 @@ REGISTRY_BASE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-if [ -d "$REPO_ROOT/agent-python" ]; then
-    AGENT_DIR="$REPO_ROOT/agent-python"
-else
-    AGENT_DIR="$REPO_ROOT"
-fi
+AGENT_DIR="$REPO_ROOT/src/agent-python"
 
 # 2. Build & Push do Guardrail Agent (Python)
 echo ""
@@ -67,9 +63,11 @@ echo ""
 echo "🌐 [4/5] Verificando FIDO Consent Server..."
 FIDO_IMAGE="${REGISTRY_BASE}/fido-server:latest"
 
-if [ -d "$REPO_ROOT/fido-server" ]; then
-    echo "🔨 [Docker Build] FIDO Server..."
-    docker build -t "$FIDO_IMAGE" "$REPO_ROOT/fido-server"
+FIDO_DIR="$REPO_ROOT/src/fido-server"
+
+if [ -n "$FIDO_DIR" ]; then
+    echo "🔨 [Docker Build] FIDO Server a partir de: $FIDO_DIR..."
+    docker build -t "$FIDO_IMAGE" "$FIDO_DIR"
     echo "⬆️ [Docker Push] Enviando imagem FIDO..."
     docker push "$FIDO_IMAGE"
 

@@ -17,7 +17,6 @@ from .notifier import send_push_notification
 logger = logging.getLogger("GuardrailAI.Consent")
 
 SPRING_FIDO_BASE_URL = os.getenv("SPRING_FIDO_BASE_URL", "http://localhost:8080").rstrip("/")
-CONSENT_WEB_BASE_URL = os.getenv("CONSENT_WEB_BASE_URL", SPRING_FIDO_BASE_URL).rstrip("/")
 CONSENT_TTL_SECONDS = 120
 
 

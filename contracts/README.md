@@ -18,7 +18,7 @@ Este diretório contém os schemas e contratos formais de comunicação entre o 
 Ordem Aprovada (Python) ──> Canonical JSON ──> HMAC-SHA256 ──> POST /api/consent/challenges (Java)
                                                                        │
                                                                        ▼
-Investidor Biometria (Passkey) ◄── Link WhatsApp/App ◄── Notificação FIDO
+Investidor Biometria (Passkey) ◄── Notificação Push (FCM) ◄── Notificação FIDO
 ```
 
 O `canonicalPayload` é serializado com chaves ordenadas alfabeticamente para garantir correspondência exata de hash (`orderHash`), evitando que qualquer interceptador altere quantidade, ticker, preço ou stop-loss.

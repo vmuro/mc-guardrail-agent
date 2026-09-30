@@ -4,7 +4,7 @@ services:
   # Servidor FIDO / WebAuthn (Java 21 / Spring Boot)
   fido-server:
     build:
-      context: ./fido-server
+      context: ./src/fido-server
       dockerfile: Dockerfile
     container_name: guardrail-fido-server
     ports:
@@ -18,7 +18,7 @@ services:
   # Agente de IA e Guardrail Engine (Python 3.12 / FastAPI)
   guardrail-agent:
     build:
-      context: ./agent-python
+      context: ./src/agent-python
       dockerfile: Dockerfile
     container_name: guardrail-agent-job
     command: ["python", "src/server.py"]
@@ -27,13 +27,16 @@ services:
     depends_on:
       - fido-server
     volumes:
-      - ./config:/app/config:ro
+      - ./src/agent-python/config:/app/config:ro
+      - ~/.config/gcloud:/root/.config/gcloud:ro
     environment:
       - CLIENTS_CONFIG_FILE=/app/config/clients.json
       - SPRING_FIDO_BASE_URL=http://fido-server:8080
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - PROJECT_ID=${PROJECT_ID:-gft-brazil-bu-gcp}
       - LOCATION=${LOCATION:-us-central1}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
+      - GOOGLE_APPLICATION_CREDENTIALS_FCM=/app/config/fcm-service-account.json
     networks:
       - guardrail-net
 

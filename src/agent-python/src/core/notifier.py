@@ -3,7 +3,7 @@ import os
 import firebase_admin
 from firebase_admin import credentials, messaging
 
-FCM_CREDS_PATH = os.getenv("FCM_CREDS_PATH", "/app/config/fcm-service-account.json")
+FCM_CREDS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_FCM") or os.getenv("FCM_CREDS_PATH", "/app/config/fcm-service-account.json")
 if not os.path.exists(FCM_CREDS_PATH):
     FCM_CREDS_PATH = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),

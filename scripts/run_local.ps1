@@ -9,8 +9,8 @@ Write-Host "====================================================================
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RootDir = Split-Path -Parent $ScriptDir
-$FidoDir = Join-Path $RootDir "fido-server"
-$AgentDir = Join-Path $RootDir "agent-python"
+$FidoDir = Join-Path $RootDir "src\fido-server"
+$AgentDir = Join-Path $RootDir "src\agent-python"
 
 # 1. Iniciar Servidor FIDO em nova janela de processo
 Write-Host "`n☕ [1/2] Iniciando Servidor FIDO Spring Boot (Porta 8080)..." -ForegroundColor Yellow

@@ -80,6 +80,10 @@ logs/
 .DS_Store
 Thumbs.db
 
-
+# ============================================
+#  Segredos, Chaves e Credenciais
+# ============================================
 fcm-service-account.json
+*service-account*.json
+*credentials*.json
 prompt_repo.txt

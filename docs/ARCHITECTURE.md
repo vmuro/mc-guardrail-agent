@@ -17,8 +17,8 @@ graph TD
     subgraph AgentPython ["agent-python/ (Módulo Python)"]
         Screener["Screener B3 & News Parser"]
         Gemini["Gemini 2.5 Flash (Vertex AI)"]
-        GuardrailEngine["Guardrail Engine 100% Determinístico<br/>Q = ⌊B / P⌋ | Stop-Loss | Tetos de Risco"]
-        ConsentClient["Cliente de Consentimento & WhatsApp"]
+        GuardrailEngine["Guardrail Engine 100% Determinístico<br/>Q = floor(B / P) | Stop-Loss | Tetos de Risco"]
+        ConsentClient["Cliente de Consentimento & Notificações Push (FCM)"]
     end
 
     subgraph FidoServer ["fido-server/ (Módulo Java Spring Boot)"]

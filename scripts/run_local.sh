@@ -15,11 +15,12 @@ echo -e "${CYAN}================================================================
 
 # 1. Iniciar Servidor FIDO (Java Spring Boot) em segundo plano
 echo -e "\n☕ ${YELLOW}[1/2] Iniciando Servidor FIDO Spring Boot (Porta 8080)...${NC}"
-cd "$(dirname "$0")/../fido-server"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT/src/fido-server"
 chmod +x mvnw
 ./mvnw spring-boot:run > fido_server.log 2>&1 &
 FIDO_PID=$!
-echo -e "   -> FIDO Server iniciado com PID ${GREEN}${FIDO_PID}${NC} (logs em fido-server/fido_server.log)"
+echo -e "   -> FIDO Server iniciado com PID ${GREEN}${FIDO_PID}${NC} (logs em fido_server.log)"
 
 # Aguarda inicialização do Spring Boot
 echo -e "   -> Aguardando FIDO Server responder em http://localhost:8080..."
@@ -34,7 +35,7 @@ done
 # 2. Executar Agente Python
 MODE="${1:-server}"
 echo -e "\n🐍 ${YELLOW}[2/2] Iniciando Agente de Governança Python (${MODE})...${NC}"
-cd "$(dirname "$0")/../agent-python"
+cd "$REPO_ROOT/src/agent-python"
 
 if [ -d ".venv" ]; then
     source .venv/bin/activate
@@ -42,12 +43,17 @@ elif [ -d "venv" ]; then
     source venv/bin/activate
 elif [ -d "../.venv" ]; then
     source ../.venv/bin/activate
-elif [ -d "../venv" ]; then
-    source ../venv/bin/activate
+elif [ -d "$REPO_ROOT/.venv" ]; then
+    source "$REPO_ROOT/.venv"
+fi
+
+CONFIG_FILE="$REPO_ROOT/data/clients.json"
+if [ ! -f "$CONFIG_FILE" ]; then
+    CONFIG_FILE="config/clients.json"
 fi
 
 if [ "$MODE" = "cli" ]; then
-    python src/main.py --config ../config/clients.json
+    python src/main.py --config "$CONFIG_FILE"
     echo -e "\n${GREEN}✅ Execução CLI concluída com sucesso!${NC}"
     echo -e "💡 Para encerrar o FIDO Server em segundo plano: kill ${FIDO_PID}"
 else

@@ -22,7 +22,7 @@ Módulo do **Agente de IA e Motor de Guardrails Determinísticos** para o Mercad
 4. **Consentimento Regulatório & Não-Repúdio (`src/core/consent.py`):**
    - Geração de **Payload Binding Criptográfico (HMAC-SHA256)** inviolável.
    - Comunicação via API REST com o `fido-server` para autorização biométrica **Passkey/WebAuthn** com TTL estrito de 120s.
-   - Disparo de notificações via WhatsApp para os investidores.
+   - Disparo de notificações Push Web via **Firebase Cloud Messaging (FCM)** para os investidores.
 
 ---
 
@@ -30,8 +30,8 @@ Módulo do **Agente de IA e Motor de Guardrails Determinísticos** para o Mercad
 
 ### 1. Pré-requisitos e Ambiente Virtual
 ```bash
-# Na raiz do projeto ou dentro de agent-python:
-cd agent-python
+# Na raiz do repositório:
+cd src/agent-python
 
 # Criar e ativar ambiente virtual
 python3 -m venv .venv
@@ -51,13 +51,18 @@ pytest -v
 
 - **Modo Padrão (utilizando clientes do `config/clients.json` compartilhado):**
   ```bash
-  python src/main.py --config ../config/clients.json
+  python src/main.py --config ../../data/clients.json
   ```
 
 - **Modo Dinâmico via CLI:**
   ```bash
   python src/main.py --client-id "investidor_vip_007" --budget 12000 --risk "AGGRESSIVE" --watchlist "PETR4.SA,VALE3.SA,ITUB4.SA"
   ```
+
+### 4. Configuração das Notificações Push (FCM)
+- Para habilitar o disparo de notificações Web Push reais, posicione a chave privada da conta de serviço em `config/fcm-service-account.json`.
+- Caso o arquivo não esteja presente, o módulo opera em **modo de simulação resiliente** sem falhar.
+- Para obter a chave e configurar o recebimento no Google Chrome, veja [`docs/FCM_SETUP.md`](../../docs/FCM_SETUP.md).
 
 ---
 

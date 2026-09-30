@@ -4,7 +4,7 @@
     "name": "Investidor Conservador",
     "risk_profile": "CONSERVATIVE",
     "allocated_budget": 5000.0,
-    "whatsapp_phone": "+5511970402136",
+    "notification_channel": "FCM_PUSH",
     "fido_user_handle": "user_cli_001"
   },
   {
@@ -12,7 +12,7 @@
     "name": "Investidor Moderado",
     "risk_profile": "MODERATE",
     "allocated_budget": 10000.0,
-    "whatsapp_phone": "+5511970402136",
+    "notification_channel": "FCM_PUSH",
     "fido_user_handle": "user_cli_002"
   },
   {
@@ -20,7 +20,7 @@
     "name": "Investidor Agressivo",
     "risk_profile": "AGGRESSIVE",
     "allocated_budget": 20000.0,
-    "whatsapp_phone": "+5511970402136",
+    "notification_channel": "FCM_PUSH",
     "fido_user_handle": "user_cli_003"
   }
 ]
