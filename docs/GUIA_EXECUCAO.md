@@ -18,6 +18,7 @@ Este documento consolida todas as instruções para execução do projeto **Guar
    - [3.2 Autenticação e Configuração da CLI (gcloud)](#32-autenticação-e-configuração-da-cli-gcloud)
    - [3.3 Deploy Automatizado no Cloud Run](#33-deploy-automatizado-no-cloud-run)
    - [3.4 Acesso Remoto Seguro via Proxy Local (Zero-Trust)](#34-acesso-remoto-seguro-via-proxy-local-zero-trust)
+   - [3.5 Execução e Monitoramento do Cloud Run Job via gcloud](#35-execução-e-monitoramento-do-cloud-run-job-via-gcloud)
 4. [Parte 3: Interfaces Web e Experiência do Usuário no Chrome](#-parte-3-interfaces-web-e-experiência-do-usuário-no-chrome)
    - [4.1 Painéis Web Disponíveis](#41-painéis-web-disponíveis)
    - [4.2 Configuração de Notificações Push Web (Chrome & FCM)](#42-configuração-de-notificações-push-web-chrome--fcm)
@@ -67,19 +68,29 @@ O projeto inclui scripts que sobem automaticamente o Servidor FIDO (Java) e o Ag
 #### No Linux / macOS / WSL (Ubuntu):
 ```bash
 chmod +x scripts/run_local.sh
+
+# Modo Servidor Web (padrão): sobe FIDO (8080) e API FastAPI (8000) para navegação web
 ./scripts/run_local.sh
+
+# Modo Job / CLI: sobe FIDO (8080) em background e executa o Job de auditoria (main.py)
+./scripts/run_local.sh cli
 ```
 
 #### No Windows (PowerShell):
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+
+# Modo Servidor Web (padrão)
 .\scripts\run_local.ps1
+
+# Modo Job / CLI
+.\scripts\run_local.ps1 -Mode cli
 ```
 
 O script realizará:
 1. Compilação e inicialização do `fido-server` na porta `8080`.
 2. Aguarda o healthcheck de prontidão do servidor Java.
-3. Ativação do ambiente Python e inicialização da API FastAPI na porta `8000`.
+3. Ativação do ambiente Python e inicialização da API FastAPI na porta `8000` (modo server) ou execução do pipeline de auditoria batch dos clientes (modo cli).
 
 ---
 
@@ -88,10 +99,24 @@ O script realizará:
 Caso prefira rodar ambos os serviços isolados em contêineres Docker:
 
 ```bash
+# Subir os servidores web (FIDO na 8080 e Agent FastAPI na 8000)
 docker compose up --build
 ```
 
-Para encerrar:
+Para executar pontualmente o **Job de Auditoria Batch** em contêiner:
+```bash
+# Execução do Job com parâmetros customizados:
+docker compose run --rm guardrail-agent python src/main.py \
+    --client-id "CLI-002" \
+    --budget 10000 \
+    --risk-profile "MODERATE" \
+    --watchlist "PETR4.SA,VALE3.SA,ITUB4.SA"
+
+# Execução em lote utilizando a base de clientes:
+docker compose run --rm guardrail-agent python src/main.py --config config/clients.json
+```
+
+Para encerrar os serviços em segundo plano:
 ```bash
 docker compose down
 ```
@@ -114,7 +139,7 @@ cd src/fido-server
 ```
 *Disponível em: `http://localhost:8080`*
 
-#### Terminal 2 — Agente Python (FastAPI / Screener):
+#### Terminal 2 — Agente Python (FastAPI / Screener / Job):
 ```bash
 cd src/agent-python
 
@@ -124,11 +149,11 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 # Modo 1: API REST FastAPI (utilizada pela interface web)
 uvicorn src.server:app --host 0.0.0.0 --port 8000 --reload
 
-# Modo 2: Execução em lote (Batch CLI com os clientes padrão)
+# Modo 2: Execução em lote (Batch CLI com a base de clientes)
 python src/main.py --config ../../data/clients.json
 
-# Modo 3: Execução dinâmica via linha de comando
-python src/main.py --client-id "CLI-002" --budget 10000 --risk "MODERATE" --watchlist "PETR4.SA,VALE3.SA,ITUB4.SA"
+# Modo 3: Execução dinâmica via linha de comando (suporta --risk-profile ou alias --risk)
+python src/main.py --client-id "CLI-002" --budget 10000 --risk-profile "MODERATE" --watchlist "PETR4.SA,VALE3.SA,ITUB4.SA"
 ```
 
 ---
@@ -218,6 +243,57 @@ gcloud run services proxy fido-consent-server \
 ```
 
 Com o proxy em execução, acesse `http://localhost:8080/evaluate.html` no Chrome. Todas as chamadas locais serão roteadas com segurança para os contêineres rodando no Google Cloud.
+
+---
+
+### 3.5 Execução e Monitoramento do Cloud Run Job via gcloud
+
+O recurso **`guardrail-agent-job`** pode ser acionado sob demanda diretamente no Google Cloud Platform através da CLI `gcloud`.
+
+#### 1. Execução Padrão (Batch Completo)
+Para disparar o processamento batch de todos os investidores cadastrados e aguardar o término no terminal:
+```bash
+gcloud run jobs execute guardrail-agent-job \
+    --region=us-central1 \
+    --project=gft-brazil-bu-gcp \
+    --wait
+```
+*(Remova a flag `--wait` caso queira disparar a execução de forma assíncrona e liberar o terminal imediatamente).*
+
+#### 2. Execução Customizada em Tempo de Execução
+Você pode acionar o Job para um cliente ou portfólio específico sem reconstruir a imagem Docker, sobrescrevendo as variáveis de ambiente com a flag `--update-env-vars` (utilize `\,` para separar os tickers na watchlist):
+```bash
+gcloud run jobs execute guardrail-agent-job \
+    --region=us-central1 \
+    --project=gft-brazil-bu-gcp \
+    --update-env-vars="CLIENT_ID=CLI-002,USER_BUDGET=10000,RISK_PROFILE=MODERATE,WATCHLIST=PETR4.SA\,VALE3.SA\,ITUB4.SA" \
+    --wait
+```
+*(Alternativamente, é possível passar argumentos CLI diretamente via `--args="src/main.py,--client-id,CLI-002,--budget,10000,--risk-profile,MODERATE,--watchlist,PETR4.SA\,VALE3.SA\,ITUB4.SA"`)*.
+
+#### 3. Monitoramento e Auditoria de Execuções
+- **Listar o histórico de execuções do Job:**
+  ```bash
+  gcloud run jobs executions list \
+      --job=guardrail-agent-job \
+      --region=us-central1 \
+      --project=gft-brazil-bu-gcp
+  ```
+
+- **Inspecionar status e detalhes de uma execução específica:**
+  ```bash
+  gcloud run jobs executions describe <EXECUTION_NAME> \
+      --region=us-central1 \
+      --project=gft-brazil-bu-gcp
+  ```
+
+- **Visualizar os logs da execução no Cloud Logging:**
+  ```bash
+  gcloud logging read "resource.type=cloud_run_job AND resource.labels.job_name=guardrail-agent-job" \
+      --project=gft-brazil-bu-gcp \
+      --limit=50 \
+      --format="value(textPayload)"
+  ```
 
 ---
 

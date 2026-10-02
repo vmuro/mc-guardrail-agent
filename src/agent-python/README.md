@@ -47,19 +47,27 @@ pip install -r requirements.txt
 pytest -v
 ```
 
-### 3. Executar o Pipeline
+### 3. Executar o Pipeline (Job de Auditoria Batch)
 
-- **Modo Padrão (utilizando clientes do `config/clients.json` compartilhado):**
+- **Modo Padrão (utilizando clientes do `data/clients.json`):**
   ```bash
   python src/main.py --config ../../data/clients.json
   ```
 
-- **Modo Dinâmico via CLI:**
+- **Modo Dinâmico via CLI (suporta `--risk-profile`, `--risk` ou `-r`):**
   ```bash
-  python src/main.py --client-id "investidor_vip_007" --budget 12000 --risk "AGGRESSIVE" --watchlist "PETR4.SA,VALE3.SA,ITUB4.SA"
+  python src/main.py --client-id "CLI-002" --budget 10000 --risk-profile "MODERATE" --watchlist "PETR4.SA,VALE3.SA,ITUB4.SA"
   ```
 
-### 4. Configuração das Notificações Push (FCM)
+### 4. Executar a API REST FastAPI (Servidor Web)
+
+```bash
+python src/server.py
+# ou: uvicorn src.server:app --host 0.0.0.0 --port 8000 --reload
+```
+*Acesse a documentação Swagger interativa em: `http://localhost:8000/docs`.*
+
+### 5. Configuração das Notificações Push (FCM)
 - Para habilitar o disparo de notificações Web Push reais, posicione a chave privada da conta de serviço em `config/fcm-service-account.json`.
 - Caso o arquivo não esteja presente, o módulo opera em **modo de simulação resiliente** sem falhar.
 - Para obter a chave e configurar o recebimento no Google Chrome, veja [`docs/FCM_SETUP.md`](../../docs/FCM_SETUP.md).
@@ -69,6 +77,12 @@ pytest -v
 ## 🐳 Executando via Docker
 
 ```bash
+# Build da imagem:
 docker build -t guardrail-agent:latest .
-docker run --rm -v $(pwd)/../config:/app/config guardrail-agent:latest
+
+# Execução como Servidor FastAPI (porta 8000):
+docker run --rm -p 8000:8000 guardrail-agent:latest
+
+# Execução pontual como Cloud Run Job / Batch CLI:
+docker run --rm guardrail-agent:latest python src/main.py --client-id "CLI-002" --budget 10000 --risk-profile "MODERATE" --watchlist "PETR4.SA,VALE3.SA"
 ```

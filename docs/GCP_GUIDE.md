@@ -57,6 +57,28 @@ O projeto conta com automação completa de build e deploy conteinerizado para o
 3. **`guardrail-agent-job` (Cloud Run Job)**:
    - Execução em batch para varredura e rebalanceamento de carteiras de múltiplos clientes.
 
+#### Executando o Job via Linha de Comando (`gcloud`):
+```bash
+# Execução padrão (aguarda término e exibe status):
+gcloud run jobs execute guardrail-agent-job \
+    --region=us-central1 \
+    --project=gft-brazil-bu-gcp \
+    --wait
+
+# Execução customizada para cliente específico via variáveis de ambiente:
+gcloud run jobs execute guardrail-agent-job \
+    --region=us-central1 \
+    --project=gft-brazil-bu-gcp \
+    --update-env-vars="CLIENT_ID=CLI-002,USER_BUDGET=10000,RISK_PROFILE=MODERATE,WATCHLIST=PETR4.SA\,VALE3.SA\,ITUB4.SA" \
+    --wait
+
+# Consultar logs da última execução:
+gcloud logging read "resource.type=cloud_run_job AND resource.labels.job_name=guardrail-agent-job" \
+    --project=gft-brazil-bu-gcp \
+    --limit=50 \
+    --format="value(textPayload)"
+```
+
 ---
 
 ## 🔒 Acesso Seguro via Proxy Local

@@ -80,3 +80,39 @@ def test_evaluate_client_portfolio_rejection():
     assert len(result["approvedOrders"]) == 0
     assert len(result["rejectedOrders"]) == 1
     assert "inválido" in result["rejectedOrders"][0]["reason"].lower()
+
+
+def test_evaluate_client_portfolio_with_hold_order():
+    """Valida avaliação determinística com ordem do tipo HOLD inicial (garante que canonical_payload seja None sem UnboundLocalError)."""
+    market_data = {
+        "VALE3.SA": {"current_price": 60.00}
+    }
+    custom_orders = [
+        {
+            "ticker": "VALE3.SA",
+            "action": "HOLD",
+            "quantity": 0,
+            "unit_price": 0.0,
+            "stop_loss_price": 0.0,
+            "rationale": "Tendência de baixa"
+        }
+    ]
+
+    result = evaluate_client_portfolio(
+        client_id="CLI-003",
+        budget=5000.00,
+        risk_profile="CONSERVATIVE",
+        custom_orders=custom_orders,
+        market_data=market_data,
+        send_notifications=False
+    )
+
+    assert result["isValid"] is True
+    assert len(result["approvedOrders"]) == 1
+    hold_order = result["approvedOrders"][0]
+    assert hold_order["ticker"] == "VALE3.SA"
+    assert hold_order["action"] == "HOLD"
+    assert hold_order["canonicalPayload"] is None
+    assert hold_order["orderHash"] is None
+    assert hold_order["challengeId"] is None
+

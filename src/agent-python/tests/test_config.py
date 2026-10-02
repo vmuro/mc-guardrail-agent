@@ -34,6 +34,24 @@ def test_load_single_client_cli_args():
         assert clients[0]["watchlist"] == ["VALE3.SA", "PETR4.SA", "WEGE3.SA"]
 
 
+def test_load_single_client_cli_args_with_risk_alias():
+    """Valida o funcionamento do alias --risk para --risk-profile."""
+    test_args = [
+        "main.py",
+        "-c", "vip_investor_88",
+        "-b", "20000.0",
+        "--risk", "CONSERVATIVE",
+        "-w", "ITUB4.SA,BBDC4.SA"
+    ]
+    with patch("sys.argv", test_args):
+        clients = load_job_configuration()
+        assert len(clients) == 1
+        assert clients[0]["client_id"] == "vip_investor_88"
+        assert clients[0]["budget"] == 20000.0
+        assert clients[0]["risk_profile"] == "CONSERVATIVE"
+        assert clients[0]["watchlist"] == ["ITUB4.SA", "BBDC4.SA"]
+
+
 def test_load_multi_client_json_config(tmp_path):
     """Valida o carregamento de arquivo de lote de múltiplos clientes."""
     config_file = tmp_path / "test_clients.json"

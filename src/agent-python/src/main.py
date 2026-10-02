@@ -23,12 +23,12 @@ def load_job_configuration() -> List[Dict[str, Any]]:
     parser.add_argument("--config", "-f", type=str, default=os.getenv("CLIENTS_CONFIG_FILE"), help="Caminho para arquivo JSON de múltiplos clientes.")
     parser.add_argument("--client-id", "-c", type=str, default=os.getenv("CLIENT_ID", "client_retail_001"), help="Identificador do cliente/investidor.")
     parser.add_argument("--budget", "-b", type=float, default=float(os.getenv("USER_BUDGET", "5000.0")), help="Orçamento disponível em R$.")
-    parser.add_argument("--risk-profile", "-r", type=str, choices=["CONSERVATIVE", "MODERATE", "AGGRESSIVE"], default=os.getenv("RISK_PROFILE", "MODERATE"), help="Perfil de risco do investidor.")
+    parser.add_argument("--risk-profile", "--risk", "-r", type=str, choices=["CONSERVATIVE", "MODERATE", "AGGRESSIVE"], default=os.getenv("RISK_PROFILE", "MODERATE"), help="Perfil de risco do investidor.")
     parser.add_argument("--watchlist", "-w", type=str, default=os.getenv("WATCHLIST", "PETR4.SA,VALE3.SA,ITUB4.SA,BBDC4.SA"), help="Lista de tickers separados por vírgula.")
     args, _ = parser.parse_known_args()
 
     config_specified_in_cli = any(arg in sys.argv for arg in ["--config", "-f"])
-    cli_single_specified = any(arg in sys.argv for arg in ["--client-id", "-c", "--budget", "-b", "--risk-profile", "-r", "--watchlist", "-w"])
+    cli_single_specified = any(arg in sys.argv for arg in ["--client-id", "-c", "--budget", "-b", "--risk-profile", "--risk", "-r", "--watchlist", "-w"])
 
     if config_specified_in_cli or (args.config and not cli_single_specified):
         for config_path in [args.config, os.path.join(REPO_ROOT, args.config), os.path.join(REPO_ROOT, "..", args.config)]:
@@ -62,12 +62,13 @@ def collect_market_data(unique_tickers: List[str]) -> Dict[str, Any]:
 
 
 def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[str, Any]):
+    default_watchlist = [t.strip().upper() for t in os.getenv("WATCHLIST", "PETR4.SA,VALE3.SA,ITUB4.SA,BBDC4.SA").split(",") if t.strip()]
     client_id = client_config.get("client_id", "anonymous_client")
     client_name = client_config.get("name", client_id)
     segment = client_config.get("segment", "Varejo")
     budget = float(client_config.get("budget", client_config.get("allocated_budget", 5000.0)))
     risk_profile = client_config.get("risk_profile", "MODERATE")
-    raw_watchlist = client_config.get("watchlist", [])
+    raw_watchlist = client_config.get("watchlist") or default_watchlist
     watchlist = [t.strip().upper() for t in raw_watchlist.split(",")] if isinstance(raw_watchlist, str) else [str(t).strip().upper() for t in raw_watchlist]
 
     print("\n" + "=" * 75)
@@ -121,9 +122,10 @@ def run_pipeline():
     clients = load_job_configuration()
     print(f"📋 Total de Clientes para Processamento: {len(clients)}")
 
+    default_watchlist = [t.strip().upper() for t in os.getenv("WATCHLIST", "PETR4.SA,VALE3.SA,ITUB4.SA,BBDC4.SA").split(",") if t.strip()]
     all_tickers = sorted(list(set(
         t.strip().upper() for c in clients
-        for t in (c.get("watchlist").split(",") if isinstance(c.get("watchlist"), str) else c.get("watchlist", []))
+        for t in (c.get("watchlist").split(",") if isinstance(c.get("watchlist"), str) else (c.get("watchlist") or default_watchlist))
         if t.strip()
     )))
     print(f"🌐 Universo de Ativos B3 Monitorados: {', '.join(all_tickers)}")

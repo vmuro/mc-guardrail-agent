@@ -129,6 +129,8 @@ def evaluate_client_portfolio(
         order = audit_item.order
         challenge_id = None
         consent_url = None
+        canonical_payload = None
+        order_hash = None
 
         if order.action in ["BUY", "SELL"] and order.quantity > 0:
             order_payload = {
