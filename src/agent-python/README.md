@@ -54,9 +54,9 @@ pytest -v
   python src/main.py --config ../../data/clients.json
   ```
 
-- **Modo Dinâmico via CLI (suporta `--risk-profile`, `--risk` ou `-r`):**
+- **Modo Dinâmico via CLI (suporta `--risk-profile`/`--risk` e envio de push com `--device-token` ou `-t`):**
   ```bash
-  python src/main.py --client-id "CLI-002" --budget 10000 --risk-profile "MODERATE" --watchlist "PETR4.SA,VALE3.SA,ITUB4.SA"
+  python src/main.py --client-id "CLI-002" --budget 10000 --risk "MODERATE" --watchlist "PETR4.SA,VALE3.SA,ITUB4.SA" --device-token "<SEU_TOKEN_FCM>"
   ```
 
 ### 4. Executar a API REST FastAPI (Servidor Web)
@@ -70,6 +70,8 @@ python src/server.py
 ### 5. Configuração das Notificações Push (FCM)
 - Para habilitar o disparo de notificações Web Push reais, posicione a chave privada da conta de serviço em `config/fcm-service-account.json`.
 - Caso o arquivo não esteja presente, o módulo opera em **modo de simulação resiliente** sem falhar.
+- **Na Web (`/api/evaluate`):** O navegador Chrome injeta o token automaticamente via payload.
+- **No Job Batch / CLI:** Configure a variável `TARGET_DEVICE_TOKEN`, adicione `"device_token"` em `clients.json`, ou use a flag `--device-token`.
 - Para obter a chave e configurar o recebimento no Google Chrome, veja [`docs/FCM_SETUP.md`](../../docs/FCM_SETUP.md).
 
 ---

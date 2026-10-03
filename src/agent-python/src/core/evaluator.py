@@ -10,7 +10,24 @@ from src.core.consent import create_fido_consent_challenge
 from src.core.notifier import send_push_notification
 from src.core.logger import log_event
 
+CONSENT_WEB_BASE_URL = os.getenv("CONSENT_WEB_BASE_URL", os.getenv("FIDO_WEB_BASE_URL", "")).rstrip("/")
 FIDO_BASE_URL = os.getenv("FIDO_BASE_URL", "http://localhost:8080").rstrip("/")
+
+
+def get_web_consent_base_url(custom_base_url: Optional[str] = None) -> str:
+    """
+    Retorna a URL base adequada para o acesso web do usuário/navegador à tela de consentimento.
+    Se o ambiente apontar para um serviço interno Cloud Run (*.run.app),
+    utiliza o proxy seguro Zero-Trust (http://localhost:8080) ou CONSENT_WEB_BASE_URL
+    para evitar erro 403 Forbidden no navegador (devido ao IAM autenticado).
+    """
+    env_url = (os.getenv("CONSENT_WEB_BASE_URL") or os.getenv("FIDO_WEB_BASE_URL") or "").rstrip("/")
+    if env_url:
+        return env_url
+    candidate = (custom_base_url or os.getenv("FIDO_BASE_URL", "http://localhost:8080")).rstrip("/")
+    if ".run.app" in candidate:
+        return "http://localhost:8080"
+    return candidate or "http://localhost:8080"
 
 
 def collect_market_data_for_tickers(tickers: List[str]) -> Dict[str, Any]:
@@ -49,7 +66,7 @@ def evaluate_client_portfolio(
       1. Modo Autônomo com IA (Watchlist -> Screener B3 -> Gemini Flash -> Guardrail)
       2. Modo Auditoria Direta (custom_orders -> Guardrail puro determinístico)
     """
-    base_url = (fido_base_url or FIDO_BASE_URL).rstrip("/")
+    web_base_url = get_web_consent_base_url(fido_base_url)
     clean_client_name = client_name or f"Investidor {client_id}"
     clean_watchlist = [t.strip().upper() for t in (watchlist or []) if t.strip()]
 
@@ -146,7 +163,7 @@ def evaluate_client_portfolio(
 
             fido_res = create_fido_consent_challenge(client_config, order_payload)
             challenge_id = fido_res.get("challengeId", f"chal-{uuid.uuid4().hex[:8]}")
-            consent_url = f"{base_url}/consent.html?challengeId={challenge_id}"
+            consent_url = f"{web_base_url}/consent.html?challengeId={challenge_id}"
             canonical_payload = fido_res.get("canonicalPayload")
             order_hash = fido_res.get("orderHash", challenge_id)
 

@@ -58,21 +58,29 @@ O projeto conta com automação completa de build e deploy conteinerizado para o
    - Execução em batch para varredura e rebalanceamento de carteiras de múltiplos clientes.
 
 #### Executando o Job via Linha de Comando (`gcloud`):
+
 ```bash
-# Execução padrão (aguarda término e exibe status):
+# 1. Configurar o Token FCM do seu Chrome para receber notificações (Faça uma única vez):
+# Para capturar o token: no Chrome, abra evaluate.html, tecle F12 > Console e rode: localStorage.getItem('fcm_token')
+gcloud run jobs update guardrail-agent-job \
+    --region=us-central1 \
+    --project=gft-brazil-bu-gcp \
+    --update-env-vars="TARGET_DEVICE_TOKEN=<SEU_FCM_TOKEN>"
+
+# 2. Execução padrão (processa todos os investidores e dispara notificações push no término):
 gcloud run jobs execute guardrail-agent-job \
     --region=us-central1 \
     --project=gft-brazil-bu-gcp \
     --wait
 
-# Execução customizada para cliente específico via variáveis de ambiente:
+# 3. Execução customizada para cliente específico via variáveis de ambiente:
 gcloud run jobs execute guardrail-agent-job \
     --region=us-central1 \
     --project=gft-brazil-bu-gcp \
-    --update-env-vars="CLIENT_ID=CLI-002,USER_BUDGET=10000,RISK_PROFILE=MODERATE,WATCHLIST=PETR4.SA\,VALE3.SA\,ITUB4.SA" \
+    --update-env-vars="CLIENT_ID=CLI-002,USER_BUDGET=10000,RISK_PROFILE=MODERATE,WATCHLIST=PETR4.SA\,VALE3.SA\,ITUB4.SA,TARGET_DEVICE_TOKEN=<SEU_FCM_TOKEN>" \
     --wait
 
-# Consultar logs da última execução:
+# 4. Consultar logs da última execução no Cloud Logging:
 gcloud logging read "resource.type=cloud_run_job AND resource.labels.job_name=guardrail-agent-job" \
     --project=gft-brazil-bu-gcp \
     --limit=50 \
@@ -95,3 +103,8 @@ gcloud run services proxy fido-consent-server \
 Em seguida, acesse no navegador:
 - **Painel de Avaliação:** `http://localhost:8080/evaluate.html`
 - **Painel de Consentimento FIDO2:** `http://localhost:8080/consent.html`
+
+### ⚙️ Separação de URLs: Backend vs Interface Web
+Devido à política de Zero-Trust (serviços Cloud Run fechados ao público):
+- **`SPRING_FIDO_BASE_URL`:** URL interna do Cloud Run (`https://fido-consent-server-*.run.app`) usada estritamente na comunicação entre serviços via token de identidade OIDC (`roles/run.invoker`).
+- **`CONSENT_WEB_BASE_URL` / `FIDO_BASE_URL`:** URL do proxy local seguro (`http://localhost:8080`) incluída nas notificações push e nos links de consentimento do navegador, evitando o erro `403 Forbidden`.

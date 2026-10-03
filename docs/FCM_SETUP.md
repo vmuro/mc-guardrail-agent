@@ -116,3 +116,82 @@ Se a notificação visual não aparecer no canto da tela mesmo com permissão co
    http://localhost:8080/consent.html?challengeId=<UUID_DO_DESAFIO>
    ```
 7. Toque no leitor biométrico (Touch ID / Windows Hello / Passkey) para assinar digitalmente a ordem antes da expiração do **TTL de 120 segundos**.
+
+---
+
+## 🤖 5. Notificações Push em Processamentos Batch e Cloud Run Jobs
+
+Além da interface Web interativa, o GuardrailAI opera em modo **Batch Autônomo** (Cloud Run Job ou CLI local) para rebalanceamento agendado ou sob demanda de carteiras.
+
+### A Diferença de Contexto: Web vs Batch
+- **Na Interface Web (`/api/evaluations`):** O navegador Chrome executa o código JavaScript do painel. Ao clicar em *"Avaliar"*, o script recupera o token da sessão ativa via `localStorage.getItem('fcm_token')` e o envia diretamente no corpo da requisição HTTP (`deviceToken`). O processo é 100% automático e transparente para o operador.
+- **No Cloud Run Job (Batch Remoto):** O contêiner roda isolado nos datacenters do Google Cloud, sem navegador ou sessão de usuário anexada. Para que o Google Cloud consiga direcionar o alerta Web Push para o seu computador específico, o Job precisa conhecer o endereço do seu navegador (`TARGET_DEVICE_TOKEN`).
+
+### Fluxo de Disparo ao Final do Job
+1. **Varredura:** O Job coleta cotações e indicadores técnicos dos ativos da B3 via Yahoo Finance.
+2. **Geração de Ordens:** O modelo Gemini 2.5 Flash analisa o mercado e formula propostas de alocação.
+3. **Auditoria Guardrail:** O motor determinístico valida limites de risco, stop-loss e ajusta volumes ($Q = \lfloor B / P \rfloor$).
+4. **Registro FIDO2:** Para cada ordem aprovada, é criado um desafio com hash canônico no `fido-consent-server` (TTL de 120s).
+5. **Disparo do Push:** O módulo [`notifier.py`](../src/agent-python/src/core/notifier.py) despacha a notificação push Data-Only via Firebase Admin SDK com o payload da ordem e o link de consentimento.
+
+### Como Obter o Token do seu Chrome
+1. Acesse `http://localhost:8080/evaluate.html` (ou o proxy do Cloud Run) no Chrome.
+2. Pressione `F12` > aba **Console**.
+3. Execute o comando:
+   ```javascript
+   localStorage.getItem('fcm_token')
+   ```
+4. Copie a chave alfanumérica exibida.
+
+### Como Configurar o Job para Disparar Push para o seu Chrome
+
+#### 1. Configuração Permanente no Cloud Run Job (Recomendada — Uma única vez):
+```bash
+gcloud run jobs update guardrail-agent-job \
+    --region=us-central1 \
+    --project=gft-brazil-bu-gcp \
+    --update-env-vars="TARGET_DEVICE_TOKEN=<SEU_FCM_TOKEN>"
+```
+*Após essa configuração única, qualquer execução padrão (`gcloud run jobs execute guardrail-agent-job --wait`) disparará os alertas push para o seu navegador automaticamente ao concluir.*
+
+#### 2. Execução Sob Demanda no GCP via Linha de Comando:
+```bash
+gcloud run jobs execute guardrail-agent-job \
+    --region=us-central1 \
+    --project=gft-brazil-bu-gcp \
+    --update-env-vars="CLIENT_ID=CLI-002,USER_BUDGET=10000,RISK_PROFILE=MODERATE,WATCHLIST=PETR4.SA\,VALE3.SA\,ITUB4.SA,TARGET_DEVICE_TOKEN=<SEU_FCM_TOKEN>" \
+    --wait
+```
+
+#### 3. Cadastro Fixo no Perfil do Cliente (`data/clients.json`):
+```json
+{
+  "client_id": "CLI-002",
+  "name": "Investidor Moderado",
+  "device_token": "<SEU_FCM_TOKEN>",
+  "risk_profile": "MODERATE",
+  "allocated_budget": 10000.0,
+  "watchlist": ["PETR4.SA", "VALE3.SA", "ITUB4.SA"]
+}
+```
+
+#### 4. Execução Local via CLI:
+```bash
+python src/agent-python/src/main.py \
+    --client-id "CLI-002" \
+    --budget 10000 \
+    --risk "MODERATE" \
+    --watchlist "PETR4.SA,VALE3.SA,ITUB4.SA" \
+    --device-token "<SEU_FCM_TOKEN>"
+```
+
+### Diagnóstico de Erros Comuns no FCM:
+- **`NotRegistered`:** O token informado expirou ou o Service Worker do Chrome foi redefinido. Obtenha um novo token no console do navegador via `localStorage.getItem('fcm_token')` e atualize a variável.
+- **`Erro fatal: Falha ao obter dados de mercado`:** Ocorreu ao passar `--args` com barras invertidas nos tickers (`PETR4.SA\,...`). Utilize sempre `--update-env-vars` para parametrizar execuções no Cloud Run.
+- **`Error: Forbidden (403) ao clicar na notificação`:**
+  - **Motivo:** Ocorre quando o navegador tenta abrir a URL direta do Cloud Run (`*.run.app`) sem autenticação IAM da GCP.
+  - **Comportamento Corrigido:** O Service Worker [`firebase-messaging-sw.js`](../src/fido-server/src/main/resources/static/firebase-messaging-sw.js) preserva o `challengeId` e direciona a navegação para `self.location.origin` (o proxy local em `http://localhost:8080/consent.html?challengeId=...`).
+  - **Ação necessária se ainda observar o erro:** O Chrome pode manter a versão antiga do Service Worker em cache. Para atualizar:
+    1. Abra `http://localhost:8080/evaluate.html`.
+    2. Pressione `F12` > aba **Application** > menu lateral **Service Workers**.
+    3. Clique em **Update** (ou marque **Update on reload** e pressione `Ctrl+F5`).

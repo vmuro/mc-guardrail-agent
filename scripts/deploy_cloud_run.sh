@@ -91,11 +91,11 @@ fi
 FIDO_URL=$(gcloud run services describe "$FIDO_SERVICE_NAME" --region="$REGION" --format='value(status.url)' --project="$PROJECT_ID" 2>/dev/null || echo "http://localhost:8080")
 echo "   🔗 URL FIDO: $FIDO_URL"
 
-# Atualizar Agent Service com a URL pública do FIDO Server para desafios de consentimento
+# Atualizar Agent Service com a URL do FIDO Server para desafios de consentimento
 echo "🔄 Atualizando referências do FIDO no Agent Service..."
 gcloud run services update "$AGENT_SERVICE_NAME" \
     --region="$REGION" \
-    --update-env-vars="SPRING_FIDO_BASE_URL=${FIDO_URL},FIDO_BASE_URL=${FIDO_URL}" \
+    --update-env-vars="SPRING_FIDO_BASE_URL=${FIDO_URL},FIDO_BASE_URL=${CONSENT_WEB_BASE_URL:-http://localhost:8080},CONSENT_WEB_BASE_URL=${CONSENT_WEB_BASE_URL:-http://localhost:8080}" \
     --project="$PROJECT_ID"
 
 # 5. Deploy do Cloud Run Job (Batch)
@@ -107,7 +107,7 @@ gcloud run jobs deploy "$AGENT_JOB_NAME" \
     --command="python" \
     --args="src/main.py" \
     --service-account="$SERVICE_ACCOUNT" \
-    --set-env-vars="PROJECT_ID=${PROJECT_ID},LOCATION=${REGION},SPRING_FIDO_BASE_URL=${FIDO_URL},FIDO_BASE_URL=${FIDO_URL},MODEL_NAME=gemini-2.5-flash" \
+    --set-env-vars="PROJECT_ID=${PROJECT_ID},LOCATION=${REGION},SPRING_FIDO_BASE_URL=${FIDO_URL},FIDO_BASE_URL=${CONSENT_WEB_BASE_URL:-http://localhost:8080},CONSENT_WEB_BASE_URL=${CONSENT_WEB_BASE_URL:-http://localhost:8080},MODEL_NAME=gemini-2.5-flash" \
     --max-retries=1 \
     --task-timeout=600s \
     --project="$PROJECT_ID"

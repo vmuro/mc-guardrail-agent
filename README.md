@@ -111,7 +111,7 @@ Para receber alertas em tempo real e assinar biometricamente as ordens recomenda
 
 ## 🎥 Vídeo (Pitch + Demo)
 
-🔗 **Link do vídeo:** Consulte o arquivo oficial [`docs/video/link.md`](docs/video/link.md) para a URL da gravação no SharePoint GFT / YouTube.
+🔗 **Link do vídeo:** Assista à gravação diretamente em [`docs/video/Apresentacao-GuardrailAI.mp4`](docs/video/Apresentacao-GuardrailAI.mp4) ou consulte os detalhes e roteiro em [`docs/video/link.md`](docs/video/link.md).
 
 ⏱️ **Duração:** 3 a 5 min
 

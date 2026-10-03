@@ -2,9 +2,20 @@
 ## Desafio de Agentes de IA · Mercado de Capitais (GFT × Google · SMC26)
 
 ### 🔗 Link do Vídeo (Pitch + Demo)
-- **URL do Vídeo:** `[INSERIR URL DO VÍDEO NO SHAREPOINT GFT / YOUTUBE NÃO LISTADO / GOOGLE DRIVE]`
+- **Arquivo da Apresentação:** [`Apresentacao-GuardrailAI.mp4`](./Apresentacao-GuardrailAI.mp4) (24 MB)
+- **Assistir no Repositório (GitLab / GitHub):** 🎥 **[Clique aqui para abrir e assistir à Apresentação](./Apresentacao-GuardrailAI.mp4)**
 - **Duração Estimada:** 3 a 5 minutos
 - **Equipe:** GuardrailAI (Capitão: Victor Rosa - `vrmu@gft.com`)
+
+> 💡 **Como assistir:** Ao clicar no link acima, o GitLab/GitHub abre o player de vídeo integrado diretamente no seu navegador, sem necessidade de download prévio.
+
+---
+
+#### 🎬 Player de Reprodução Direta:
+
+<video src="./Apresentacao-GuardrailAI.mp4" controls width="100%">
+  Seu navegador não suporta reprodução direta de vídeo. <a href="./Apresentacao-GuardrailAI.mp4">Clique aqui para abrir o arquivo Apresentacao-GuardrailAI.mp4</a>.
+</video>
 
 ---
 

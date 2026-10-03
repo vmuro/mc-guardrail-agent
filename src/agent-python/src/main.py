@@ -9,7 +9,7 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-from src.core.evaluator import evaluate_client_portfolio, collect_market_data_for_tickers
+from src.core.evaluator import evaluate_client_portfolio, collect_market_data_for_tickers, get_web_consent_base_url
 from src.core.logger import log_event
 
 # URL Base para a tela de consentimento (ngrok ou localhost)
@@ -25,10 +25,11 @@ def load_job_configuration() -> List[Dict[str, Any]]:
     parser.add_argument("--budget", "-b", type=float, default=float(os.getenv("USER_BUDGET", "5000.0")), help="Orçamento disponível em R$.")
     parser.add_argument("--risk-profile", "--risk", "-r", type=str, choices=["CONSERVATIVE", "MODERATE", "AGGRESSIVE"], default=os.getenv("RISK_PROFILE", "MODERATE"), help="Perfil de risco do investidor.")
     parser.add_argument("--watchlist", "-w", type=str, default=os.getenv("WATCHLIST", "PETR4.SA,VALE3.SA,ITUB4.SA,BBDC4.SA"), help="Lista de tickers separados por vírgula.")
+    parser.add_argument("--device-token", "-t", type=str, default=os.getenv("TARGET_DEVICE_TOKEN"), help="Token do dispositivo FCM para Push.")
     args, _ = parser.parse_known_args()
 
     config_specified_in_cli = any(arg in sys.argv for arg in ["--config", "-f"])
-    cli_single_specified = any(arg in sys.argv for arg in ["--client-id", "-c", "--budget", "-b", "--risk-profile", "--risk", "-r", "--watchlist", "-w"])
+    cli_single_specified = any(arg in sys.argv for arg in ["--client-id", "-c", "--budget", "-b", "--risk-profile", "--risk", "-r", "--watchlist", "-w", "--device-token", "-t"])
 
     if config_specified_in_cli or (args.config and not cli_single_specified):
         for config_path in [args.config, os.path.join(REPO_ROOT, args.config), os.path.join(REPO_ROOT, "..", args.config)]:
@@ -43,7 +44,8 @@ def load_job_configuration() -> List[Dict[str, Any]]:
             "segment": "Investidor Individual",
             "budget": args.budget,
             "risk_profile": args.risk_profile,
-            "watchlist": [t.strip().upper() for t in args.watchlist.split(",")]
+            "watchlist": [t.strip().strip('\\').upper() for t in args.watchlist.split(",") if t.strip()],
+            "device_token": args.device_token
         }]
 
     for json_path in [os.path.join(REPO_ROOT, "config/clients.json"), os.path.join(REPO_ROOT, "../config/clients.json")]:
@@ -54,7 +56,8 @@ def load_job_configuration() -> List[Dict[str, Any]]:
     return [{
         "client_id": args.client_id, "name": f"Investidor {args.client_id}", "segment": "Investidor Individual",
         "budget": args.budget, "risk_profile": args.risk_profile,
-        "watchlist": [t.strip().upper() for t in args.watchlist.split(",")]
+        "watchlist": [t.strip().strip('\\').upper() for t in args.watchlist.split(",") if t.strip()],
+        "device_token": args.device_token
     }]
 
 def collect_market_data(unique_tickers: List[str]) -> Dict[str, Any]:
@@ -62,14 +65,15 @@ def collect_market_data(unique_tickers: List[str]) -> Dict[str, Any]:
 
 
 def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[str, Any]):
-    default_watchlist = [t.strip().upper() for t in os.getenv("WATCHLIST", "PETR4.SA,VALE3.SA,ITUB4.SA,BBDC4.SA").split(",") if t.strip()]
+    default_watchlist = [t.strip().strip('\\').upper() for t in os.getenv("WATCHLIST", "PETR4.SA,VALE3.SA,ITUB4.SA,BBDC4.SA").split(",") if t.strip()]
     client_id = client_config.get("client_id", "anonymous_client")
     client_name = client_config.get("name", client_id)
     segment = client_config.get("segment", "Varejo")
     budget = float(client_config.get("budget", client_config.get("allocated_budget", 5000.0)))
     risk_profile = client_config.get("risk_profile", "MODERATE")
     raw_watchlist = client_config.get("watchlist") or default_watchlist
-    watchlist = [t.strip().upper() for t in raw_watchlist.split(",")] if isinstance(raw_watchlist, str) else [str(t).strip().upper() for t in raw_watchlist]
+    watchlist = [t.strip().strip('\\').upper() for t in raw_watchlist.split(",")] if isinstance(raw_watchlist, str) else [str(t).strip().strip('\\').upper() for t in raw_watchlist]
+    device_token = client_config.get("device_token") or os.getenv("TARGET_DEVICE_TOKEN")
 
     print("\n" + "=" * 75)
     print(f"👤 PROCESSANDO INVESTIDOR: {client_name} ({segment}) [ID: {client_id}]")
@@ -86,7 +90,8 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
         segment=segment,
         market_data=market_data,
         fido_base_url=FIDO_BASE_URL,
-        send_notifications=True
+        send_notifications=True,
+        device_token=device_token
     )
 
     print("\n" + "-" * 75)
@@ -107,7 +112,7 @@ def process_client_portfolio(client_config: Dict[str, Any], market_data: Dict[st
         for rec in res["regulatoryConsents"]:
             cid = rec.get("challengeId", "n/a")
             print(f"  - Desafio ID: {cid} | Status: PENDING_BIOMETRIC | TTL: 120s")
-            print(f"    🔗 URL WebAuthn: {rec.get('consentUrl', f'{FIDO_BASE_URL}/consent.html?challengeId={cid}')}")
+            print(f"    🔗 URL WebAuthn: {rec.get('consentUrl', f'{get_web_consent_base_url(FIDO_BASE_URL)}/consent.html?challengeId={cid}')}")
 
     if res.get("rejectedOrders"):
         print(f"\n🛑 ORDENS REJEITADAS ({len(res['rejectedOrders'])}):")
@@ -122,9 +127,9 @@ def run_pipeline():
     clients = load_job_configuration()
     print(f"📋 Total de Clientes para Processamento: {len(clients)}")
 
-    default_watchlist = [t.strip().upper() for t in os.getenv("WATCHLIST", "PETR4.SA,VALE3.SA,ITUB4.SA,BBDC4.SA").split(",") if t.strip()]
+    default_watchlist = [t.strip().strip('\\').upper() for t in os.getenv("WATCHLIST", "PETR4.SA,VALE3.SA,ITUB4.SA,BBDC4.SA").split(",") if t.strip()]
     all_tickers = sorted(list(set(
-        t.strip().upper() for c in clients
+        t.strip().strip('\\').upper() for c in clients
         for t in (c.get("watchlist").split(",") if isinstance(c.get("watchlist"), str) else (c.get("watchlist") or default_watchlist))
         if t.strip()
     )))
@@ -134,7 +139,7 @@ def run_pipeline():
     market_data = collect_market_data(all_tickers)
     if not market_data:
         print("❌ Erro fatal: Falha ao obter dados de mercado.")
-        return
+        sys.exit(1)
 
     for client_cfg in clients:
         process_client_portfolio(client_cfg, market_data)

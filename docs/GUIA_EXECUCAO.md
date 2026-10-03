@@ -152,8 +152,8 @@ uvicorn src.server:app --host 0.0.0.0 --port 8000 --reload
 # Modo 2: Execução em lote (Batch CLI com a base de clientes)
 python src/main.py --config ../../data/clients.json
 
-# Modo 3: Execução dinâmica via linha de comando (suporta --risk-profile ou alias --risk)
-python src/main.py --client-id "CLI-002" --budget 10000 --risk-profile "MODERATE" --watchlist "PETR4.SA,VALE3.SA,ITUB4.SA"
+# Modo 3: Execução dinâmica via linha de comando (suporta --risk-profile/--risk e envio de push com --device-token/-t)
+python src/main.py --client-id "CLI-002" --budget 10000 --risk "MODERATE" --watchlist "PETR4.SA,VALE3.SA,ITUB4.SA" --device-token "<SEU_TOKEN_FCM>"
 ```
 
 ---
@@ -248,7 +248,7 @@ Com o proxy em execução, acesse `http://localhost:8080/evaluate.html` no Chrom
 
 ### 3.5 Execução e Monitoramento do Cloud Run Job via gcloud
 
-O recurso **`guardrail-agent-job`** pode ser acionado sob demanda diretamente no Google Cloud Platform através da CLI `gcloud`.
+O recurso **`guardrail-agent-job`** executa a rotina batch de governança e rebalanceamento de carteiras de forma assíncrona diretamente no Google Cloud Platform.
 
 #### 1. Execução Padrão (Batch Completo)
 Para disparar o processamento batch de todos os investidores cadastrados e aguardar o término no terminal:
@@ -260,16 +260,54 @@ gcloud run jobs execute guardrail-agent-job \
 ```
 *(Remova a flag `--wait` caso queira disparar a execução de forma assíncrona e liberar o terminal imediatamente).*
 
-#### 2. Execução Customizada em Tempo de Execução
-Você pode acionar o Job para um cliente ou portfólio específico sem reconstruir a imagem Docker, sobrescrevendo as variáveis de ambiente com a flag `--update-env-vars` (utilize `\,` para separar os tickers na watchlist):
-```bash
-gcloud run jobs execute guardrail-agent-job \
-    --region=us-central1 \
-    --project=gft-brazil-bu-gcp \
-    --update-env-vars="CLIENT_ID=CLI-002,USER_BUDGET=10000,RISK_PROFILE=MODERATE,WATCHLIST=PETR4.SA\,VALE3.SA\,ITUB4.SA" \
-    --wait
-```
-*(Alternativamente, é possível passar argumentos CLI diretamente via `--args="src/main.py,--client-id,CLI-002,--budget,10000,--risk-profile,MODERATE,--watchlist,PETR4.SA\,VALE3.SA\,ITUB4.SA"`)*.
+---
+
+#### 2. Mecanismo de Notificações Push Web (FCM) ao Final do Job
+
+Ao término da auditoria matemática de cada investidor, para cada ordem de compra/venda gerada pelo Gemini 2.5 e aprovada pelo Guardrail Engine, o sistema registra um desafio biométrico FIDO2 no `fido-consent-server` e despacha uma notificação Web Push nativa no padrão **Data-Only** para o navegador Google Chrome do investidor/operador.
+
+> **💡 Por que na Interface Web é automático e no Job requer o Device Token?**
+> - **Na Interface Web (`/api/evaluations`):** Quando você clica em *"Avaliar"* em `evaluate.html`, o JavaScript do navegador lê o token de sessão gerado pelo Firebase SDK em `localStorage.getItem('fcm_token')` e o anexa automaticamente no corpo da requisição HTTP.
+> - **No Cloud Run Job (Processo Batch Remoto):** O contêiner roda isolado nos servidores do Google Cloud, sem navegador ou interface gráfica. Para que o Google Cloud consiga entregar a notificação na tela do **seu** computador, ele precisa saber o endereço do seu navegador (`TARGET_DEVICE_TOKEN`).
+
+##### Como capturar o seu FCM Device Token no Google Chrome (5 segundos):
+1. Abra `http://localhost:8080/evaluate.html` (ou via túnel seguro do GCP) no Google Chrome e garanta que as notificações estejam permitidas.
+2. Pressione `F12` no Chrome para abrir as Ferramentas do Desenvolvedor (*DevTools*) e clique na aba **Console**.
+3. Digite e pressione `Enter`:
+   ```javascript
+   localStorage.getItem('fcm_token')
+   ```
+4. Copie a string retornada (ex: `eA...:APA91b...`).
+
+##### Opções para Configurar o Token no Cloud Run Job:
+
+- **Opção A: Configuração Permanente no Cloud Run Job (Recomendada — Faça uma única vez):**
+  Configure o seu token diretamente na definição do Job na nuvem:
+  ```bash
+  gcloud run jobs update guardrail-agent-job \
+      --region=us-central1 \
+      --project=gft-brazil-bu-gcp \
+      --update-env-vars="TARGET_DEVICE_TOKEN=<SEU_FCM_TOKEN>"
+  ```
+  *A partir desse momento, qualquer execução (`gcloud run jobs execute guardrail-agent-job --wait`) disparará automaticamente as notificações push para o seu Chrome ao final do processamento.*
+
+- **Opção B: Sobrescrita Dinâmica na Execução via `--update-env-vars`:**
+  Passe o token e os parâmetros do investidor no comando de disparo:
+  ```bash
+  gcloud run jobs execute guardrail-agent-job \
+      --region=us-central1 \
+      --project=gft-brazil-bu-gcp \
+      --update-env-vars="CLIENT_ID=CLI-002,USER_BUDGET=10000,RISK_PROFILE=MODERATE,WATCHLIST=PETR4.SA\,VALE3.SA\,ITUB4.SA,TARGET_DEVICE_TOKEN=<SEU_FCM_TOKEN>" \
+      --wait
+  ```
+
+- **Opção C: Cadastro Fixo no Perfil do Investidor (`data/clients.json`):**
+  Insira a propriedade `"device_token": "<SEU_FCM_TOKEN>"` no objeto do cliente desejado dentro de `data/clients.json`. O batch carregará o token automaticamente para aquele investidor.
+
+> [!WARNING]
+> **Atenção à sintaxe no `gcloud`:** Evite passar argumentos com vírgulas escapadas por barra invertida na flag `--args` (ex.: `--watchlist,PETR4.SA\,VALE3.SA`), pois o CLI repassa a barra invertida literalmente (`PETR4.SA\`), invalidando a consulta do ticker na B3. Utilize sempre a flag **`--update-env-vars`** para configurar a watchlist e parâmetros de execução.
+
+---
 
 #### 3. Monitoramento e Auditoria de Execuções
 - **Listar o histórico de execuções do Job:**
@@ -287,7 +325,7 @@ gcloud run jobs execute guardrail-agent-job \
       --project=gft-brazil-bu-gcp
   ```
 
-- **Visualizar os logs da execução no Cloud Logging:**
+- **Visualizar os logs completos da execução no Cloud Logging:**
   ```bash
   gcloud logging read "resource.type=cloud_run_job AND resource.labels.job_name=guardrail-agent-job" \
       --project=gft-brazil-bu-gcp \
@@ -341,3 +379,6 @@ Para receber as notificações no padrão **Data-Only** na área de trabalho:
    - No Chrome, clique no ícone de ajustes ao lado da URL e confirme se **Notificações** está definido como **Permitir**.
 3. **"FIDO Server não conecta com o Agente Python"**
    - Certifique-se de que o backend Python esteja ativo na porta 8000 ou que a variável `AGENT_PYTHON_URL` no `application.yml` aponte para o endereço correto.
+4. **"Erro 403 Forbidden ao clicar na notificação push do Job"**
+   - **Causa:** O Cloud Run opera em arquitetura Zero-Trust (privado sem `allUsers`). Clicar na URL direta do Cloud Run (`*.run.app`) é bloqueado pelo Google Cloud IAM.
+   - **Solução:** O Service Worker e o Agente Python redirecionam o clique para a origem ativa local (`http://localhost:8080/consent.html?challengeId=...`). Certifique-se de que o proxy local esteja rodando (`gcloud run services proxy fido-consent-server --port=8080`) e dê um `Ctrl+F5` na página para atualizar o Service Worker em cache no Chrome.

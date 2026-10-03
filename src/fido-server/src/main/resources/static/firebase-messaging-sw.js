@@ -24,15 +24,21 @@ messaging.onBackgroundMessage((payload) => {
   // No padrão Data-Only, payload.data contém todas as informações da ordem
   const notificationTitle = payload.data?.title || payload.notification?.title || "🚨 GuardrailAI - Autorização de Ordem";
   const notificationBody = payload.data?.body || payload.notification?.body || "Nova recomendação disponível para autorização.";
+  const challengeId = payload.data?.challengeId;
   const consentUrl = payload.data?.consentUrl || payload.data?.url;
-  const notificationTag = payload.data?.tag || ('guardrail-order-' + (payload.data?.challengeId || payload.data?.ticker || 'single'));
+  const notificationTag = payload.data?.tag || ('guardrail-order-' + (challengeId || payload.data?.ticker || 'single'));
 
   const notificationOptions = {
     body: notificationBody,
     icon: 'https://www.gstatic.com/mobilesdk/160503_mobilesdk/logo/2x/firebase_28.png',
     tag: notificationTag,
     renotify: false,
-    data: { url: consentUrl },
+    data: {
+      url: consentUrl,
+      consentUrl: consentUrl,
+      challengeId: challengeId,
+      ...(payload.data || {})
+    },
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
@@ -44,13 +50,51 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
   const data = event.notification.data || {};
-  let targetUrl = data.url || data.consentUrl;
-  if (data.challengeId) {
-    targetUrl = new URL(`/consent.html?challengeId=${data.challengeId}`, self.location.origin).href;
+  let challengeId = data.challengeId;
+  const rawUrl = data.url || data.consentUrl;
+
+  // Extrai challengeId via query params ou regex se não estiver diretamente presente
+  if (!challengeId && rawUrl) {
+    try {
+      const parsed = new URL(rawUrl, self.location.origin);
+      challengeId = parsed.searchParams.get('challengeId');
+    } catch (e) {
+      const match = String(rawUrl).match(/[?&]challengeId=([^&#]+)/);
+      if (match) challengeId = decodeURIComponent(match[1]);
+    }
+  }
+
+  let targetUrl;
+  if (challengeId) {
+    targetUrl = new URL(`/consent.html?challengeId=${encodeURIComponent(challengeId)}`, self.location.origin).href;
+  } else if (rawUrl) {
+    try {
+      const parsed = new URL(rawUrl, self.location.origin);
+      targetUrl = new URL(parsed.pathname + parsed.search, self.location.origin).href;
+    } catch (e) {
+      targetUrl = new URL(rawUrl, self.location.origin).href;
+    }
+  } else {
+    targetUrl = new URL('/consent.html', self.location.origin).href;
   }
 
   if (targetUrl) {
-    event.waitUntil(clients.openWindow(targetUrl));
+    event.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+        // Se uma aba de consentimento já estiver aberta, navega e foca nela
+        for (const client of windowClients) {
+          if (client.url && client.url.includes('/consent.html') && 'focus' in client) {
+            client.focus();
+            if ('navigate' in client) {
+              return client.navigate(targetUrl);
+            }
+          }
+        }
+        if (clients.openWindow) {
+          return clients.openWindow(targetUrl);
+        }
+      })
+    );
   } else {
     console.warn("[SW] URL de consentimento não localizada no clique.");
   }

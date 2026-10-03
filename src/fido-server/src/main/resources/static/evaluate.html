@@ -864,10 +864,26 @@
                     });
                     notif.onclick = () => {
                         window.focus();
-                        if (data.challengeId) {
-                            window.location.href = `consent.html?challengeId=${data.challengeId}`;
-                        } else if (data.consentUrl) {
-                            window.location.href = data.consentUrl;
+                        let cid = data.challengeId;
+                        const rawUrl = data.consentUrl || data.url;
+                        if (!cid && rawUrl) {
+                            try {
+                                const parsed = new URL(rawUrl, window.location.origin);
+                                cid = parsed.searchParams.get("challengeId");
+                            } catch (e) {
+                                const match = String(rawUrl).match(/[?&]challengeId=([^&#]+)/);
+                                if (match) cid = decodeURIComponent(match[1]);
+                            }
+                        }
+                        if (cid) {
+                            window.open(`consent.html?challengeId=${encodeURIComponent(cid)}`, '_blank');
+                        } else if (rawUrl) {
+                            try {
+                                const parsed = new URL(rawUrl, window.location.origin);
+                                window.open(parsed.pathname + parsed.search, '_blank');
+                            } catch (e) {
+                                window.open(rawUrl, '_blank');
+                            }
                         }
                     };
                 }
