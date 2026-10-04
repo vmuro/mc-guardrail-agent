@@ -63,12 +63,17 @@ O **GuardrailAI** é um middleware B2B de governança que atua como ponte segura
 
 ![Arquitetura da Solução](docs/arquitetura.png)
 
-**Descrição do fluxo:**
-1. O investidor ou assessor solicita a avaliação via interface web ou conector Gemini Enterprise.
-2. O **Módulo Python (FastAPI)** coleta dados da B3, aciona o **Gemini 2.5 Flash (Vertex AI)** para elaboração de tese e submete as propostas ao **Guardrail Engine**.
-3. O Guardrail recalcula deterministicamente quantidades e tetos de risco. Ordens aprovadas geram um hash criptográfico (HMAC-SHA256).
-4. O **Módulo Java (Spring Boot / FIDO2)** registra o desafio em memória concorrente com TTL de 120 segundos e dispara uma Notificação Push via **Firebase Cloud Messaging**.
-5. O investidor assina biometricamente o desafio via **WebAuthn Passkey** na tela de consentimento. A ordem assinada e auditada é persistida com registro imutável no **Google Cloud Logging**.
+> 📄 **Diagrama Vetorial & Especificação Completa:**  
+> - **PDF em Alta Resolução (Vetor):** [`docs/arquitetura.pdf`](docs/arquitetura.pdf)  
+> - **Documentação Arquitetural Detalhada:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+
+**Ciclo de Vida Operacional e Regulatório (Os 6 Passos CVM):**
+1. **Solicitação & Parâmetros:** O investidor via Google Chrome (`evaluate.html`) ou o Cloud Run Job em lote submete o orçamento ($B$), perfil de risco (`CLI-001/002/003`) e watchlist B3.
+2. **Varredura B3 & Tese IA:** O Screener processa cotações históricas, MACD, Bollinger e RSI (14); o **Gemini 2.5 Flash (Vertex AI)** formula a tese de alocação analítica em JSON estruturado.
+3. **Guardrail Determinístico:** O motor matemático intercepta a proposta, recalcula deterministicamente a quantidade exata $Q = \lfloor B/P \rfloor$, valida o Stop-Loss obrigatório e impõe tetos rígidos de risco (20%, 35%, 50%).
+4. **Desafio Criptográfico:** A ordem aprovada gera um Payload Binding canônico com hash HMAC-SHA256 e registra o desafio no **FIDO Server (Java Spring Boot)** com janela estrita de **TTL de 120 segundos**.
+5. **Web Push & Biometria:** O Firebase Admin SDK despacha uma notificação Web Push (Data-Only) para o Google Chrome; o investidor abre `consent.html` e assina a ordem via **WebAuthn Passkey** (TouchID / FaceID / Windows Hello).
+6. **Auditoria CVM & Não-Repúdio:** A assinatura biométrica é validada, o desafio passa para `AUTHORIZED` e a trilha de conformidade imutável é registrada no **Google Cloud Logging**.
 
 ---
 
