@@ -109,11 +109,18 @@ Para receber alertas em tempo real e assinar biometricamente as ordens recomenda
 
 ---
 
-## 🎥 Vídeo (Pitch + Demo)
+## 🎥 Vídeos (Pitch + Demonstrações Práticas)
 
-🔗 **Link do vídeo:** Assista à gravação diretamente em [`docs/video/Apresentacao-GuardrailAI.mp4`](docs/video/Apresentacao-GuardrailAI.mp4) ou consulte os detalhes e roteiro em [`docs/video/link.md`](docs/video/link.md).
+Os vídeos oficiais de apresentação e demonstração estão disponíveis no diretório [`docs/video/`](docs/video/):
 
-⏱️ **Duração:** 3 a 5 min
+1. **Apresentação Geral & Pitch de Negócio (3 a 5 min):**  
+   🎥 [`Apresentacao-GuardrailAI.mp4`](docs/video/Apresentacao-GuardrailAI.mp4) — Visão geral executiva, conformidade regulatória B3/CVM e os 3 pilares da arquitetura.
+2. **Demo 1 — Solicitação e Avaliação de Ordem pelo Operador (Fluxo Web):**  
+   🎥 [`Solicitacao-Avaliacao-Ativos.mp4`](docs/video/Solicitacao-Avaliacao-Ativos.mp4) — O operador solicita a avaliação interativa de ativos via painel web e efetua a autorização assinando a ordem com biometria Passkey/FIDO2.
+3. **Demo 2 — Avaliação Agendada e Notificação Push (Fluxo Batch Autônomo):**  
+   🎥 [`Solicitacao-Avaliacao-Agendada.mp4`](docs/video/Solicitacao-Avaliacao-Agendada.mp4) — O operador não solicita a avaliação; um job agendado no Cloud Run executa a avaliação em lote, despacha notificação Web Push (FCM) e o operador autoriza a execução assinando a ordem.
+
+Consulte o documento oficial com roteiro e players embutidos em [`docs/video/link.md`](docs/video/link.md).
 
 ---
 

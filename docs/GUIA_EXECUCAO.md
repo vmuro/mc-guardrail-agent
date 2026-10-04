@@ -260,6 +260,8 @@ gcloud run jobs execute guardrail-agent-job \
 ```
 *(Remova a flag `--wait` caso queira disparar a execução de forma assíncrona e liberar o terminal imediatamente).*
 
+> 🎥 **Gravação em Vídeo desta Execução:** Assista à demonstração completa do job batch em segundo plano emitindo notificação push e o operador autorizando a ordem no arquivo [`docs/video/Solicitacao-Avaliacao-Agendada.mp4`](video/Solicitacao-Avaliacao-Agendada.mp4) (ou consulte o sumário em [`docs/video/link.md`](video/link.md)).
+
 ---
 
 #### 2. Mecanismo de Notificações Push Web (FCM) ao Final do Job
@@ -345,6 +347,8 @@ Ao término da auditoria matemática de cada investidor, para cada ordem de comp
 - **Interface de Consentimento Biométrico (Passkey / WebAuthn):**  
   `http://localhost:8080/consent.html?challengeId=<UUID>`  
   *Exibe o resumo inviolável da ordem de compra, o timer regressivo do TTL (120s) e o leitor de biometria para autorização regulatória.*
+
+> 🎥 **Gravação em Vídeo deste Fluxo Web:** Assista à demonstração do operador solicitando a avaliação interativa e efetuando a autorização biométrica no arquivo [`docs/video/Solicitacao-Avaliacao-Ativos.mp4`](video/Solicitacao-Avaliacao-Ativos.mp4) (ou consulte o sumário em [`docs/video/link.md`](video/link.md)).
 
 ---
 

@@ -117,11 +117,15 @@ Se a notificação visual não aparecer no canto da tela mesmo com permissão co
    ```
 7. Toque no leitor biométrico (Touch ID / Windows Hello / Passkey) para assinar digitalmente a ordem antes da expiração do **TTL de 120 segundos**.
 
+> 🎥 **Gravação em Vídeo deste Fluxo:** Assista à demonstração do operador solicitando a avaliação e efetuando a autorização biométrica no arquivo [`docs/video/Solicitacao-Avaliacao-Ativos.mp4`](video/Solicitacao-Avaliacao-Ativos.mp4).
+
 ---
 
 ## 🤖 5. Notificações Push em Processamentos Batch e Cloud Run Jobs
 
 Além da interface Web interativa, o GuardrailAI opera em modo **Batch Autônomo** (Cloud Run Job ou CLI local) para rebalanceamento agendado ou sob demanda de carteiras.
+
+> 🎥 **Gravação em Vídeo deste Fluxo Batch:** Assista à demonstração do job agendado em segundo plano disparando o push e o operador autorizando a ordem no arquivo [`docs/video/Solicitacao-Avaliacao-Agendada.mp4`](video/Solicitacao-Avaliacao-Agendada.mp4).
 
 ### A Diferença de Contexto: Web vs Batch
 - **Na Interface Web (`/api/evaluations`):** O navegador Chrome executa o código JavaScript do painel. Ao clicar em *"Avaliar"*, o script recupera o token da sessão ativa via `localStorage.getItem('fcm_token')` e o envia diretamente no corpo da requisição HTTP (`deviceToken`). O processo é 100% automático e transparente para o operador.
